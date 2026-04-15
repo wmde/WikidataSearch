@@ -14,8 +14,8 @@ from ..services.logger import Feedback, Logger
 router = APIRouter(include_in_schema=False)
 
 
-@limiter.limit(settings.RATE_LIMIT)
 @router.get("/")
+@limiter.limit(settings.RATE_LIMIT)
 async def root(request: Request, background_tasks: BackgroundTasks):
     """Serve the frontend index page."""
     background_tasks.add_task(Logger.add_request, request, 200, time.time())
@@ -29,7 +29,8 @@ def mount_static(app):
 
 @router.get("/languages", summary="Supported languages")
 @cache(expire=settings.CACHE_TTL)
-async def languages():
+@limiter.limit(settings.RATE_LIMIT)
+async def languages(request: Request):
     """Return available vector-database and translated language codes."""
     vectordb_langs = set(SEARCH.vectordb_langs)
     other_langs = set(SEARCH.translator.mint_langs) - vectordb_langs
@@ -39,8 +40,8 @@ async def languages():
     }
 
 
-@limiter.limit("10/minute")
 @router.post("/feedback", include_in_schema=False)
+@limiter.limit(settings.RATE_LIMIT)
 async def feedback(
     request: Request,
     query: str = Query(..., examples=["testing"]),

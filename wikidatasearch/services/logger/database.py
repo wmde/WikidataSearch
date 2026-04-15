@@ -201,4 +201,11 @@ class Feedback(Base):
                 traceback.print_exc()
 
 
-Base.metadata.create_all(bind=engine)
+def initialize_database():
+    """Create tables if they do not already exist."""
+    try:
+        Base.metadata.create_all(engine)
+        return True
+    except Exception as e:
+        print(f"Error while initializing labels database: {e}")
+        return False
