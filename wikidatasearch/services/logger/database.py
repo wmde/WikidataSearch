@@ -20,7 +20,7 @@ from sqlalchemy import (
 from sqlalchemy.dialects.mysql import JSON
 from sqlalchemy.orm import declarative_base, sessionmaker
 
-from ..config import settings
+from ...config import settings
 
 """
 MySQL database setup for storing Wikidata labels in all languages.
