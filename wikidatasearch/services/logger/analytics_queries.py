@@ -151,29 +151,24 @@ class AnalyticsQueryService:
         start: datetime,
         end: datetime,
         requests_threshold: int = 0,
-    ) -> dict[str, int]:
+        include_user_agents: bool = False,
+    ) -> dict[str, Any]:
         """Return unique user agents for route '/' between start and end."""
         q = text(
             """
             SELECT
-                t.client,
-                COUNT(*) AS requests
-            FROM (
-                SELECT
-                    CASE
-                        WHEN COALESCE(on_browser, 0) = 1 THEN 'browser'
-                        ELSE 'api'
-                    END AS client,
-                    user_agent_hash
-                FROM requests
-                WHERE route = '/'
-                  AND timestamp BETWEEN :start AND :end
-                  AND user_agent_hash IS NOT NULL
-                  AND user_agent_hash != ''
-                GROUP BY client, user_agent_hash
-                HAVING :requests_threshold <= 0 OR COUNT(*) > :requests_threshold
-            ) AS t
-            GROUP BY client
+                CASE
+                    WHEN COALESCE(on_browser, 0) = 1 THEN 'browser'
+                    ELSE 'api'
+                END AS client,
+                user_agent_hash
+            FROM requests
+            WHERE route = '/'
+              AND timestamp BETWEEN :start AND :end
+              AND user_agent_hash IS NOT NULL
+              AND user_agent_hash != ''
+            GROUP BY client, user_agent_hash
+            HAVING :requests_threshold <= 0 OR COUNT(*) > :requests_threshold
         """
         )
 
@@ -188,17 +183,20 @@ class AnalyticsQueryService:
                 },
             )
 
-        out = {"browser": 0, "api": 0, "total": 0}
+        out: dict[str, Any] = {"browser": 0, "api": 0, "total": 0}
         if df.empty:
+            if include_user_agents:
+                out["user_agents"] = []
             return out
 
         for _, row in df.iterrows():
             client = str(row["client"])
-            requests = int(row["requests"])
             if client in ("browser", "api"):
-                out[client] = requests
+                out[client] += 1
 
         out["total"] = out["browser"] + out["api"]
+        if include_user_agents:
+            out["user_agents"] = sorted(df["user_agent_hash"].astype(str).unique().tolist())
         return out
 
     @staticmethod

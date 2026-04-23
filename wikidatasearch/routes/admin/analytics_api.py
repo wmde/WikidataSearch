@@ -34,6 +34,7 @@ def total_user_agents_route(
     start: datetime = Query(...),
     end: datetime = Query(...),
     requests_threshold: int = Query(0, ge=0),
+    include_user_agents: bool = Query(False),
 ):
     """Return unique user agents between start and end datetimes."""
     try:
@@ -42,6 +43,7 @@ def total_user_agents_route(
             start_utc,
             end_utc,
             requests_threshold=requests_threshold,
+            include_user_agents=include_user_agents,
         )
     except Exception:
         traceback.print_exc()
