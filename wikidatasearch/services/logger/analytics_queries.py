@@ -20,16 +20,7 @@ class AnalyticsQueryService:
         if df.empty or "user_agent_value" not in df.columns:
             return []
 
-        values = (
-            df["user_agent_value"]
-            .fillna("")
-            .astype(str)
-            .str.strip()
-            .replace("", pd.NA)
-            .dropna()
-            .unique()
-            .tolist()
-        )
+        values = df["user_agent_value"].fillna("").astype(str).str.strip().replace("", pd.NA).dropna().unique().tolist()
         return sorted(values)
 
     @classmethod
