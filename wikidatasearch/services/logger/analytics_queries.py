@@ -172,7 +172,6 @@ class AnalyticsQueryService:
                     COALESCE(MAX(NULLIF(user_agent, '')), user_agent_hash) AS user_agent_value
                 FROM requests
                 WHERE route IN {AnalyticsQueryService.VECTOR_QUERY_ROUTES_SQL}
-                  AND status NOT IN (400, 422)
                   AND timestamp BETWEEN :start AND :end
                   AND user_agent_hash IS NOT NULL
                   AND user_agent_hash != ''
@@ -210,7 +209,6 @@ class AnalyticsQueryService:
                     user_agent_hash
                 FROM requests
                 WHERE route IN {AnalyticsQueryService.VECTOR_QUERY_ROUTES_SQL}
-                  AND status NOT IN (400, 422)
                   AND timestamp BETWEEN :start AND :end
                   AND user_agent_hash IS NOT NULL
                   AND user_agent_hash != ''
@@ -239,7 +237,6 @@ class AnalyticsQueryService:
                 COALESCE(SUM(CASE WHEN COALESCE(on_browser, 0) = 0 THEN 1 ELSE 0 END), 0) AS api
             FROM requests
             WHERE route IN {AnalyticsQueryService.VECTOR_QUERY_ROUTES_SQL}
-              AND status NOT IN (400, 422)
               AND timestamp BETWEEN :start AND :end
         """
         )
@@ -267,7 +264,6 @@ class AnalyticsQueryService:
                 COUNT(*) AS requests
             FROM requests
             WHERE route IN {AnalyticsQueryService.VECTOR_QUERY_ROUTES_SQL}
-              AND status NOT IN (400, 422)
               AND timestamp BETWEEN :start AND :end
             GROUP BY lang
             ORDER BY requests DESC
@@ -305,7 +301,6 @@ class AnalyticsQueryService:
                     COALESCE(MAX(NULLIF(user_agent, '')), user_agent_hash) AS user_agent_value
                 FROM requests
                 WHERE route IN {AnalyticsQueryService.VECTOR_QUERY_ROUTES_SQL}
-                  AND status NOT IN (400, 422)
                   AND timestamp <= :end
                   AND user_agent_hash IS NOT NULL
                   AND user_agent_hash != ''
@@ -331,7 +326,6 @@ class AnalyticsQueryService:
                 SELECT user_agent_hash
                 FROM requests
                 WHERE route IN {AnalyticsQueryService.VECTOR_QUERY_ROUTES_SQL}
-                  AND status NOT IN (400, 422)
                   AND timestamp <= :end
                   AND user_agent_hash IS NOT NULL
                   AND user_agent_hash != ''
@@ -370,7 +364,6 @@ class AnalyticsQueryService:
                     COALESCE(MAX(NULLIF(user_agent, '')), user_agent_hash) AS user_agent_value
                 FROM requests
                 WHERE route IN {AnalyticsQueryService.VECTOR_QUERY_ROUTES_SQL}
-                  AND status NOT IN (400, 422)
                   AND timestamp <= :end
                   AND user_agent_hash IS NOT NULL
                   AND user_agent_hash != ''
@@ -396,7 +389,6 @@ class AnalyticsQueryService:
                 SELECT user_agent_hash
                 FROM requests
                 WHERE route IN {AnalyticsQueryService.VECTOR_QUERY_ROUTES_SQL}
-                  AND status NOT IN (400, 422)
                   AND timestamp <= :end
                   AND user_agent_hash IS NOT NULL
                   AND user_agent_hash != ''
