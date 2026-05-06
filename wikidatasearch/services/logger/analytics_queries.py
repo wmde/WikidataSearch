@@ -268,7 +268,6 @@ class AnalyticsQueryService:
             FROM requests
             WHERE route IN {AnalyticsQueryService.VECTOR_QUERY_ROUTES_SQL}
               AND status NOT IN (400, 422)
-              AND COALESCE(on_browser, 0) = 0
               AND timestamp BETWEEN :start AND :end
             GROUP BY lang
             ORDER BY requests DESC
@@ -310,6 +309,7 @@ class AnalyticsQueryService:
                   AND timestamp <= :end
                   AND user_agent_hash IS NOT NULL
                   AND user_agent_hash != ''
+                  AND COALESCE(on_browser, 0) = 0
                 GROUP BY user_agent_hash
                 HAVING
                     SUM(CASE WHEN timestamp BETWEEN :start AND :end THEN 1 ELSE 0 END) > 0
@@ -335,6 +335,7 @@ class AnalyticsQueryService:
                   AND timestamp <= :end
                   AND user_agent_hash IS NOT NULL
                   AND user_agent_hash != ''
+                  AND COALESCE(on_browser, 0) = 0
                 GROUP BY user_agent_hash
                 HAVING
                     SUM(CASE WHEN timestamp BETWEEN :start AND :end THEN 1 ELSE 0 END) > 0
@@ -373,6 +374,7 @@ class AnalyticsQueryService:
                   AND timestamp <= :end
                   AND user_agent_hash IS NOT NULL
                   AND user_agent_hash != ''
+                  AND COALESCE(on_browser, 0) = 0
                 GROUP BY user_agent_hash
                 HAVING
                     SUM(CASE WHEN timestamp BETWEEN :start AND :end THEN 1 ELSE 0 END) > 0
@@ -398,6 +400,7 @@ class AnalyticsQueryService:
                   AND timestamp <= :end
                   AND user_agent_hash IS NOT NULL
                   AND user_agent_hash != ''
+                  AND COALESCE(on_browser, 0) = 0
                 GROUP BY user_agent_hash
                 HAVING
                     SUM(CASE WHEN timestamp BETWEEN :start AND :end THEN 1 ELSE 0 END) > 0
