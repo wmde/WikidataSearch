@@ -237,6 +237,7 @@ class AnalyticsQueryService:
                 COALESCE(SUM(CASE WHEN COALESCE(on_browser, 0) = 0 THEN 1 ELSE 0 END), 0) AS api
             FROM requests
             WHERE route IN {AnalyticsQueryService.VECTOR_QUERY_ROUTES_SQL}
+              AND status NOT IN (400, 422)
               AND timestamp BETWEEN :start AND :end
         """
         )
