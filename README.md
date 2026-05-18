@@ -4,7 +4,7 @@ WikidataSearch is the API and web app for semantic retrieval over the Wikidata V
 
 This repository powers the public service. The intended usage is the hosted API, not running your own deployment.
 
-**Hosted Web App:** [https://wd-vectordb.wmcloud.org/](https://wd-vectordb.wmcloud.org/) \
+**Hosted Web App:** [https://wd-vectordb.wmcloud.org](https://wd-vectordb.wmcloud.org) \
 **Hosted API Docs (OpenAPI):** [https://wd-vectordb.wmcloud.org/docs](https://wd-vectordb.wmcloud.org/docs) \
 **Project Page:** [https://www.wikidata.org/wiki/Wikidata:Vector_Database](https://www.wikidata.org/wiki/Wikidata:Vector_Database)
 
