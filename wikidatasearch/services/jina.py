@@ -148,4 +148,4 @@ class JinaAIAPI:
         Returns:
             float: max(0.0, dot(vec1, vec2)).
         """
-        return max(0.0, np.dot(vec1, vec2))
+        return max(0.0, (np.dot(vec1, vec2) + 1.0) / 2.0)
