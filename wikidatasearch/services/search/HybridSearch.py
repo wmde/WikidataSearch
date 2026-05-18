@@ -1,6 +1,7 @@
 """Hybrid search combining vector, keyword, translation, and reranking flows."""
 
 import re
+import traceback
 from concurrent.futures import ThreadPoolExecutor
 
 from ..jina import JinaAIAPI
@@ -168,7 +169,11 @@ class HybridSearch(Search):
         filter = filter or {}
 
         # Perform keyword search
-        keyword_results = self.keywordsearch.search(query, filter=filter, lang=lang, K=K)
+        try:
+            keyword_results = self.keywordsearch.search(query, filter=filter, lang=lang, K=K)
+        except Exception:
+            traceback.print_exc()
+            return []
 
         # Get similarity scores for keyword results
         keyword_results = self.get_similarity_scores(
