@@ -20,7 +20,7 @@ from sqlalchemy import (
 from sqlalchemy.dialects.mysql import JSON
 from sqlalchemy.orm import declarative_base, sessionmaker
 
-from ..config import settings
+from ...config import settings
 
 """
 MySQL database setup for storing Wikidata labels in all languages.
@@ -201,4 +201,11 @@ class Feedback(Base):
                 traceback.print_exc()
 
 
-Base.metadata.create_all(bind=engine)
+def initialize_database():
+    """Create tables if they do not already exist."""
+    try:
+        Base.metadata.create_all(engine)
+        return True
+    except Exception as e:
+        print(f"Error while initializing labels database: {e}")
+        return False
