@@ -1,0 +1,2 @@
+# Run once daily at 03:17 UTC.
+17 3 * * * cd /workspace && uv run python -m jobs.redact_logs

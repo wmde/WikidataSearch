@@ -16,6 +16,7 @@ from sqlalchemy import (
     String,
     Text,
     create_engine,
+    text,
 )
 from sqlalchemy.dialects.mysql import JSON
 from sqlalchemy.orm import declarative_base, sessionmaker
@@ -36,9 +37,11 @@ DATABASE_URL = f"mariadb+pymysql://{DB_USER}:{DB_PASS}@{DB_HOST}:{DB_PORT}/{DB_N
 
 engine = create_engine(
     DATABASE_URL,
-    pool_size=5,  # Limit the number of open connections
-    max_overflow=10,  # Allow extra connections beyond pool_size
-    pool_recycle=1800,  # Recycle connections every 30 minutes
+    pool_size=settings.LOG_DB_POOL_SIZE,
+    max_overflow=settings.LOG_DB_MAX_OVERFLOW,
+    pool_timeout=settings.LOG_DB_POOL_TIMEOUT,
+    pool_recycle=settings.LOG_DB_POOL_RECYCLE,
+    pool_use_lifo=True,
     pool_pre_ping=True,
 )
 
@@ -89,9 +92,6 @@ class Logger(Base):
         """
         with Session() as session:
             try:
-                # Clean up old logs (older than 90 days)
-                Logger.redact_old_requests(90, 1000)
-
                 user_agent = request.headers.get("user-agent", "unknown")[:255]
                 user_agent_hash = sha256(user_agent.encode("utf-8")).hexdigest()
                 on_browser = "Mozilla" in user_agent
@@ -127,38 +127,47 @@ class Logger(Base):
                 traceback.print_exc()
 
     @staticmethod
-    def redact_old_requests(days: int = 90, batch_size: int = 1000):
-        """Redacts old request logs.
+    def redact_old_requests(days: int = 90, batch_size: int = 1000) -> int:
+        """Redacts old request logs in SQL batches.
 
         Args:
             days (int, optional): The age of logs to redact in days. Defaults to 90.
             batch_size (int, optional): The number of logs to process in each batch. Defaults to 1000.
+
+        Returns:
+            int: Total number of rows redacted.
         """
         cutoff_date = datetime.utcnow() - timedelta(days=days)
-        with Session() as session:
+        batch_size = max(1, int(batch_size))
+        update_stmt = text(
+            f"""
+            UPDATE requests
+            SET user_agent = '', query = '', is_redacted = 1
+            WHERE (is_redacted = 0 OR is_redacted IS NULL)
+              AND timestamp < :cutoff_date
+            ORDER BY id
+            LIMIT {batch_size}
+            """
+        )
+
+        total_redacted = 0
+        batches = 0
+        while True:
             try:
-                old_requests = (
-                    session.query(Logger)
-                    .filter(Logger.timestamp < cutoff_date)
-                    .filter((Logger.is_redacted.is_(None)) | (Logger.is_redacted.is_(False)))
-                    .order_by(Logger.id.asc())
-                    .yield_per(batch_size)
-                )
-
-                changed = False
-                for row in old_requests:
-                    row.user_agent = ""
-                    row.query = ""
-                    row.is_redacted = True
-                    changed = True
-
-                if changed:
-                    session.commit()
-
+                with engine.begin() as conn:
+                    result = conn.execute(update_stmt, {"cutoff_date": cutoff_date})
+                    redacted = max(0, int(result.rowcount or 0))
             except Exception:
-                session.rollback()
                 traceback.print_exc()
+                break
 
+            if redacted == 0:
+                break
+
+            total_redacted += redacted
+            batches += 1
+
+        return total_redacted
 
 class Feedback(Base):
     """Feedback model for user interactions."""
