@@ -169,6 +169,7 @@ class Logger(Base):
 
         return total_redacted
 
+
 class Feedback(Base):
     """Feedback model for user interactions."""
 
