@@ -7,6 +7,7 @@ from datetime import datetime, timedelta
 from hashlib import sha256
 
 from sqlalchemy import (
+    BigInteger,
     Boolean,
     Column,
     DateTime,
@@ -17,6 +18,9 @@ from sqlalchemy import (
     Text,
     create_engine,
     text,
+)
+from sqlalchemy import (
+    inspect as sqlalchemy_inspect,
 )
 from sqlalchemy.dialects.mysql import JSON
 from sqlalchemy.orm import declarative_base, sessionmaker
@@ -92,6 +96,7 @@ class Logger(Base):
         """
         with Session() as session:
             try:
+                timestamp = datetime.utcnow()
                 user_agent = request.headers.get("user-agent", "unknown")[:255]
                 user_agent_hash = sha256(user_agent.encode("utf-8")).hexdigest()
                 on_browser = "Mozilla" in user_agent
@@ -106,6 +111,7 @@ class Logger(Base):
 
                 # Add new log entry
                 log_entry = Logger(
+                    timestamp=timestamp,
                     route=request.url.path[:128],
                     user_agent=user_agent,
                     user_agent_hash=user_agent_hash,
@@ -121,6 +127,12 @@ class Logger(Base):
                     is_redacted=False,
                 )
                 session.add(log_entry)
+                UserAgents.add_request(
+                    session=session,
+                    user_agent_hash=user_agent_hash,
+                    seen_at=timestamp,
+                    on_browser=on_browser,
+                )
                 session.commit()
             except Exception:
                 session.rollback()
@@ -170,6 +182,104 @@ class Logger(Base):
         return total_redacted
 
 
+class UserAgents(Base):
+    """Aggregated history for unique user agents."""
+
+    __tablename__ = "user_agent_history"
+    __table_args__ = (
+        Index("ix_user_agent_history_first_seen", "first_seen"),
+        Index("ix_user_agent_history_last_seen", "last_seen"),
+        Index("ix_user_agent_history_on_browser_first_seen", "on_browser", "first_seen"),
+        {"mysql_charset": "utf8mb4"},
+    )
+
+    user_agent_hash = Column(String(64), primary_key=True)
+    first_seen = Column(DateTime, nullable=False)
+    last_seen = Column(DateTime, nullable=False)
+    on_browser = Column(Boolean, nullable=False)
+    distinct_days = Column(Integer, nullable=False, default=0)
+    total_requests = Column(BigInteger, nullable=False, default=0)
+
+    @staticmethod
+    def add_request(session, user_agent_hash: str, seen_at: datetime, on_browser: bool) -> None:
+        """Upsert aggregate user-agent history for one logged request."""
+        session.execute(
+            text(
+                """
+                INSERT INTO user_agent_history (
+                    user_agent_hash,
+                    first_seen,
+                    last_seen,
+                    on_browser,
+                    distinct_days,
+                    total_requests
+                )
+                VALUES (
+                    :user_agent_hash,
+                    :seen_at,
+                    :seen_at,
+                    :on_browser,
+                    1,
+                    1
+                )
+                ON DUPLICATE KEY UPDATE
+                    first_seen = LEAST(first_seen, VALUES(first_seen)),
+                    distinct_days = distinct_days + IF(DATE(VALUES(last_seen)) > DATE(last_seen), 1, 0),
+                    last_seen = GREATEST(last_seen, VALUES(last_seen)),
+                    on_browser = on_browser OR VALUES(on_browser),
+                    total_requests = total_requests + 1
+                """
+            ),
+            {
+                "user_agent_hash": user_agent_hash,
+                "seen_at": seen_at,
+                "on_browser": on_browser,
+            },
+        )
+
+    @staticmethod
+    def build_from_requests() -> int:
+        """Merge available request logs into user-agent history.
+
+        Existing aggregates are preserved because the requests table may no longer
+        contain old redacted rows. Counts use the greatest known value instead of
+        being added, making repeated builds safe when requests overlap history.
+        """
+        with engine.begin() as conn:
+            result = conn.execute(
+                text(
+                    """
+                    INSERT INTO user_agent_history (
+                        user_agent_hash,
+                        first_seen,
+                        last_seen,
+                        on_browser,
+                        distinct_days,
+                        total_requests
+                    )
+                    SELECT
+                        user_agent_hash,
+                        MIN(timestamp) AS first_seen,
+                        MAX(timestamp) AS last_seen,
+                        MAX(COALESCE(on_browser, 0)) AS on_browser,
+                        COUNT(DISTINCT DATE(timestamp)) AS distinct_days,
+                        COUNT(*) AS total_requests
+                    FROM requests
+                    WHERE user_agent_hash IS NOT NULL
+                      AND user_agent_hash != ''
+                    GROUP BY user_agent_hash
+                    ON DUPLICATE KEY UPDATE
+                        first_seen = LEAST(first_seen, VALUES(first_seen)),
+                        last_seen = GREATEST(last_seen, VALUES(last_seen)),
+                        on_browser = on_browser OR VALUES(on_browser),
+                        distinct_days = GREATEST(distinct_days, VALUES(distinct_days)),
+                        total_requests = GREATEST(total_requests, VALUES(total_requests))
+                    """
+                )
+            )
+            return max(0, int(result.rowcount or 0))
+
+
 class Feedback(Base):
     """Feedback model for user interactions."""
 
@@ -214,7 +324,13 @@ class Feedback(Base):
 def initialize_database():
     """Create tables if they do not already exist."""
     try:
+        user_agent_history_exists = sqlalchemy_inspect(engine).has_table(UserAgents.__tablename__)
+
         Base.metadata.create_all(engine)
+
+        if not user_agent_history_exists:
+            UserAgents.build_from_requests()
+
         return True
     except Exception as e:
         print(f"Error while initializing labels database: {e}")

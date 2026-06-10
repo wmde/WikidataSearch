@@ -60,7 +60,14 @@ services:
       db:
         condition: service_healthy
     environment:
-    # Only DB + redaction settings are needed for this cron job
+    # Search credentials are required while importing application configuration
+      ASTRA_DB_APPLICATION_TOKEN: ${ASTRA_DB_APPLICATION_TOKEN}
+      ASTRA_DB_API_ENDPOINT: ${ASTRA_DB_API_ENDPOINT}
+      ASTRA_DB_DATABASE_ID: ${ASTRA_DB_DATABASE_ID}
+      ASTRA_DB_KEYSPACE: ${ASTRA_DB_KEYSPACE}
+      ASTRA_DB_COLLECTION: ${ASTRA_DB_COLLECTION}
+      JINA_API_KEY: ${JINA_API_KEY}
+    # DB + redaction settings
       DB_NAME: ${DB_NAME}
       DB_USER: ${DB_USER}
       DB_PASS: ${DB_PASS}
@@ -77,4 +84,5 @@ services:
     volumes:
       - "./wikidatasearch:/workspace/wikidatasearch"
       - "./jobs:/workspace/jobs"
+      - "./data:/workspace/data"
     restart: unless-stopped
