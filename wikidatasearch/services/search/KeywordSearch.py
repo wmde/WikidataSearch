@@ -43,7 +43,12 @@ class KeywordSearch(Search):
             instance_of_filter = "haswbstatement:P31=" + instance_of_filter
             query = query + " " + instance_of_filter
 
-        params = {"cirrusDumpResult": "", "search": query, "srlimit": K}
+        params = {
+            "cirrusDumpResult": "",
+            "search": query,
+            "srlimit": K,
+            "uselang": lang,
+        }
         headers = {"User-Agent": "Wikidata Vector Database/Alpha Version (embedding@wikimedia.de)"}
 
         if filter.get("metadata.IsItem", False):
