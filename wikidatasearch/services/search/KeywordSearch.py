@@ -49,7 +49,7 @@ class KeywordSearch(Search):
             "srlimit": K,
             "uselang": lang,
         }
-        headers = {"User-Agent": "Wikidata Vector Database/Alpha Version (embedding@wikimedia.de)"}
+        headers = {"User-Agent": "Wikidata Vector Database (embedding@wikimedia.de)"}
 
         if filter.get("metadata.IsItem", False):
             params["ns0"] = 1
