@@ -7,9 +7,10 @@ from fastapi_cache.backends.inmemory import InMemoryBackend
 from gradio.routes import mount_gradio_app
 
 from .config import settings
-from .dependencies import register_rate_limit
+from .dependencies import register_rate_limit, verify_admin_auth
 from .routes import frontend, health, item, property, similarity
-from .services.analytics import build_analytics_app
+from .routes.admin import analytics_api_router, build_analytics_app
+from .services.logger.database import initialize_database
 
 app = FastAPI(
     title="Wikidata Vector Search",
@@ -37,6 +38,7 @@ register_rate_limit(app)
 @app.on_event("startup")
 async def startup_event():
     """Initialize the FastAPI cache at startup."""
+    initialize_database()
     FastAPICache.init(InMemoryBackend(), prefix="wikidata-cache")
 
 
@@ -50,4 +52,11 @@ app.include_router(health.router)
 frontend.mount_static(app)
 
 if settings.ANALYTICS_API_SECRET:
-    mount_gradio_app(app, build_analytics_app(), path=f"/admin/{settings.ANALYTICS_API_SECRET}")
+    app.include_router(analytics_api_router)
+    mount_gradio_app(
+        app,
+        build_analytics_app(),
+        path="/admin",
+        auth_dependency=verify_admin_auth,
+        auth_message="Provide HTTP Basic auth using ANALYTICS_API_SECRET as password.",
+    )

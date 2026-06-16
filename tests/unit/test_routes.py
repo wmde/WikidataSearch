@@ -7,10 +7,11 @@ import pytest
 from fastapi import BackgroundTasks, HTTPException
 
 
-def test_languages_route_returns_split_languages(test_ctx, run_async):
+def test_languages_route_returns_split_languages(test_ctx, run_async, make_request):
     """Validate languages route returns split languages."""
     frontend = test_ctx["frontend"]
-    data = run_async(frontend.languages())
+    req = make_request("/languages")
+    data = run_async(frontend.languages(req))
     assert data["vectordb_langs"] == ["en", "fr"]
     assert "de" in data["other_langs"]
     assert "ar" in data["other_langs"]
