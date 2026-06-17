@@ -173,8 +173,6 @@ class AnalyticsQueryService:
                 FROM requests
                 WHERE route IN {AnalyticsQueryService.VECTOR_QUERY_ROUTES_SQL}
                   AND timestamp BETWEEN :start AND :end
-                  AND user_agent_hash IS NOT NULL
-                  AND user_agent_hash != ''
                 GROUP BY client, user_agent_hash
                 HAVING :requests_threshold <= 0 OR COUNT(*) > :requests_threshold
                 ORDER BY user_agent_hash
@@ -210,8 +208,6 @@ class AnalyticsQueryService:
                 FROM requests
                 WHERE route IN {AnalyticsQueryService.VECTOR_QUERY_ROUTES_SQL}
                   AND timestamp BETWEEN :start AND :end
-                  AND user_agent_hash IS NOT NULL
-                  AND user_agent_hash != ''
                 GROUP BY client, user_agent_hash
                 HAVING :requests_threshold <= 0 OR COUNT(*) > :requests_threshold
             ) AS t
@@ -237,7 +233,6 @@ class AnalyticsQueryService:
                 COALESCE(SUM(CASE WHEN COALESCE(on_browser, 0) = 0 THEN 1 ELSE 0 END), 0) AS api
             FROM requests
             WHERE route IN {AnalyticsQueryService.VECTOR_QUERY_ROUTES_SQL}
-              AND status NOT IN (400, 422)
               AND timestamp BETWEEN :start AND :end
         """
         )
@@ -298,19 +293,17 @@ class AnalyticsQueryService:
             q = text(
                 f"""
                 SELECT
-                    user_agent_hash,
-                    COALESCE(MAX(NULLIF(user_agent, '')), user_agent_hash) AS user_agent_value
-                FROM requests
-                WHERE route IN {AnalyticsQueryService.VECTOR_QUERY_ROUTES_SQL}
-                  AND timestamp <= :end
-                  AND user_agent_hash IS NOT NULL
-                  AND user_agent_hash != ''
-                  AND COALESCE(on_browser, 0) = 0
-                GROUP BY user_agent_hash
-                HAVING
-                    SUM(CASE WHEN timestamp BETWEEN :start AND :end THEN 1 ELSE 0 END) > 0
-                    AND SUM(CASE WHEN timestamp < :start THEN 1 ELSE 0 END) = 0
-                ORDER BY user_agent_hash
+                    r.user_agent_hash,
+                    COALESCE(MAX(NULLIF(r.user_agent, '')), r.user_agent_hash) AS user_agent_value
+                FROM requests AS r
+                JOIN user_agent_history AS h
+                  ON h.user_agent_hash = r.user_agent_hash
+                WHERE r.route IN {AnalyticsQueryService.VECTOR_QUERY_ROUTES_SQL}
+                  AND r.timestamp BETWEEN :start AND :end
+                  AND COALESCE(r.on_browser, 0) = 0
+                  AND h.first_seen BETWEEN :start AND :end
+                GROUP BY r.user_agent_hash
+                ORDER BY r.user_agent_hash
                 """
             )
             with engine.connect() as conn:
@@ -324,17 +317,15 @@ class AnalyticsQueryService:
             f"""
             SELECT COUNT(*) AS total
             FROM (
-                SELECT user_agent_hash
-                FROM requests
-                WHERE route IN {AnalyticsQueryService.VECTOR_QUERY_ROUTES_SQL}
-                  AND timestamp <= :end
-                  AND user_agent_hash IS NOT NULL
-                  AND user_agent_hash != ''
-                  AND COALESCE(on_browser, 0) = 0
-                GROUP BY user_agent_hash
-                HAVING
-                    SUM(CASE WHEN timestamp BETWEEN :start AND :end THEN 1 ELSE 0 END) > 0
-                    AND SUM(CASE WHEN timestamp < :start THEN 1 ELSE 0 END) = 0
+                SELECT r.user_agent_hash
+                FROM requests AS r
+                JOIN user_agent_history AS h
+                  ON h.user_agent_hash = r.user_agent_hash
+                WHERE r.route IN {AnalyticsQueryService.VECTOR_QUERY_ROUTES_SQL}
+                  AND r.timestamp BETWEEN :start AND :end
+                  AND COALESCE(r.on_browser, 0) = 0
+                  AND h.first_seen BETWEEN :start AND :end
+                GROUP BY r.user_agent_hash
             ) AS t
             """
         )
@@ -361,19 +352,17 @@ class AnalyticsQueryService:
             q = text(
                 f"""
                 SELECT
-                    user_agent_hash,
-                    COALESCE(MAX(NULLIF(user_agent, '')), user_agent_hash) AS user_agent_value
-                FROM requests
-                WHERE route IN {AnalyticsQueryService.VECTOR_QUERY_ROUTES_SQL}
-                  AND timestamp <= :end
-                  AND user_agent_hash IS NOT NULL
-                  AND user_agent_hash != ''
-                  AND COALESCE(on_browser, 0) = 0
-                GROUP BY user_agent_hash
-                HAVING
-                    SUM(CASE WHEN timestamp BETWEEN :start AND :end THEN 1 ELSE 0 END) > 0
-                    AND COUNT(DISTINCT DATE(timestamp)) >= :min_days
-                ORDER BY user_agent_hash
+                    r.user_agent_hash,
+                    COALESCE(MAX(NULLIF(r.user_agent, '')), r.user_agent_hash) AS user_agent_value
+                FROM requests AS r
+                JOIN user_agent_history AS h
+                  ON h.user_agent_hash = r.user_agent_hash
+                WHERE r.route IN {AnalyticsQueryService.VECTOR_QUERY_ROUTES_SQL}
+                  AND r.timestamp BETWEEN :start AND :end
+                  AND COALESCE(r.on_browser, 0) = 0
+                  AND h.distinct_days >= :min_days
+                GROUP BY r.user_agent_hash
+                ORDER BY r.user_agent_hash
                 """
             )
             with engine.connect() as conn:
@@ -387,17 +376,15 @@ class AnalyticsQueryService:
             f"""
             SELECT COUNT(*) AS total
             FROM (
-                SELECT user_agent_hash
-                FROM requests
-                WHERE route IN {AnalyticsQueryService.VECTOR_QUERY_ROUTES_SQL}
-                  AND timestamp <= :end
-                  AND user_agent_hash IS NOT NULL
-                  AND user_agent_hash != ''
-                  AND COALESCE(on_browser, 0) = 0
-                GROUP BY user_agent_hash
-                HAVING
-                    SUM(CASE WHEN timestamp BETWEEN :start AND :end THEN 1 ELSE 0 END) > 0
-                    AND COUNT(DISTINCT DATE(timestamp)) >= :min_days
+                SELECT r.user_agent_hash
+                FROM requests AS r
+                JOIN user_agent_history AS h
+                  ON h.user_agent_hash = r.user_agent_hash
+                WHERE r.route IN {AnalyticsQueryService.VECTOR_QUERY_ROUTES_SQL}
+                  AND r.timestamp BETWEEN :start AND :end
+                  AND COALESCE(r.on_browser, 0) = 0
+                  AND h.distinct_days >= :min_days
+                GROUP BY r.user_agent_hash
             ) AS t
             """
         )

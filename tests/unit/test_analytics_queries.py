@@ -49,11 +49,9 @@ def _capture_sql(monkeypatch, df: pd.DataFrame) -> dict[str, str]:
     return captured
 
 
-def _assert_vector_routes_and_status_filter(sql_text: str) -> None:
-    """Assert vector-route queries exclude 400 and 422 statuses."""
+def _assert_vector_routes_filter(sql_text: str) -> None:
+    """Assert analytics queries stay scoped to vector-query routes."""
     assert f"route IN {AnalyticsQueryService.VECTOR_QUERY_ROUTES_SQL}" in sql_text
-    assert "status NOT IN (400, 422)" in sql_text
-    assert "status <> 422" not in sql_text
 
 
 def test_get_total_user_agents_prefers_original_user_agent(monkeypatch):
@@ -191,8 +189,53 @@ def test_get_consistent_user_agents_count_only_uses_total_query(monkeypatch):
         ),
     ],
 )
-def test_vector_route_queries_exclude_400_and_422(monkeypatch, call):
-    """Ensure all vector-route analytics queries exclude 400 and 422."""
+def test_vector_route_queries_filter_to_vector_routes(monkeypatch, call):
+    """Ensure vector-route analytics queries filter to vector routes."""
     captured = _capture_sql(monkeypatch, pd.DataFrame())
     call()
-    _assert_vector_routes_and_status_filter(captured["query"])
+    _assert_vector_routes_filter(captured["query"])
+
+
+@pytest.mark.parametrize(
+    ("call", "history_filter"),
+    [
+        (
+            lambda: AnalyticsQueryService.get_new_user_agents(
+                datetime(2026, 4, 1),
+                datetime(2026, 4, 23),
+                include_user_agents=True,
+            ),
+            "h.first_seen BETWEEN :start AND :end",
+        ),
+        (
+            lambda: AnalyticsQueryService.get_new_user_agents(
+                datetime(2026, 4, 1),
+                datetime(2026, 4, 23),
+                include_user_agents=False,
+            ),
+            "h.first_seen BETWEEN :start AND :end",
+        ),
+        (
+            lambda: AnalyticsQueryService.get_consistent_user_agents(
+                datetime(2026, 4, 1),
+                datetime(2026, 4, 23),
+                include_user_agents=True,
+            ),
+            "h.distinct_days >= :min_days",
+        ),
+        (
+            lambda: AnalyticsQueryService.get_consistent_user_agents(
+                datetime(2026, 4, 1),
+                datetime(2026, 4, 23),
+                include_user_agents=False,
+            ),
+            "h.distinct_days >= :min_days",
+        ),
+    ],
+)
+def test_cross_history_user_agent_analytics_use_history_table(monkeypatch, call, history_filter):
+    """Use aggregated user-agent history for first-seen and consistency checks."""
+    captured = _capture_sql(monkeypatch, pd.DataFrame())
+    call()
+    assert "JOIN user_agent_history AS h" in captured["query"]
+    assert history_filter in captured["query"]

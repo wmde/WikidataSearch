@@ -88,6 +88,7 @@ def load_logger(monkeypatch, table_exists=False):
     monkeypatch.setattr(sqlalchemy, "inspect", lambda _engine: FakeInspector(table_exists))
     monkeypatch.setattr(MetaData, "create_all", lambda *_args, **_kwargs: None)
     monkeypatch.delitem(sys.modules, "wikidatasearch.services.logger", raising=False)
+    monkeypatch.delitem(sys.modules, "wikidatasearch.services.logger.database", raising=False)
 
     return importlib.import_module("wikidatasearch.services.logger"), fake_engine.connection
 
