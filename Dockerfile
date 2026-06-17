@@ -35,10 +35,7 @@ RUN uv sync --locked
 
 COPY wikidatasearch ./wikidatasearch
 COPY jobs ./jobs
+COPY start.sh ./start.sh
 
 # Container start script
-CMD [ "uv", "run", "gunicorn", "wikidatasearch:app", "--bind", "0.0.0.0:8080", \
-    "-k", "uvicorn.workers.UvicornWorker", "-w", "6", \
-    "--timeout", "120", "--graceful-timeout", "30", "--keep-alive", "10", \
-    "--max-requests", "1000", "--max-requests-jitter", "200", \
-    "--access-logfile", "-", "--error-logfile", "-" ]
+CMD [ "sh", "/workspace/start.sh" ]

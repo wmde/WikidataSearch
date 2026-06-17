@@ -91,9 +91,9 @@ class AnalyticsQueryService:
             clauses.append("LOWER(COALESCE(user_agent, '')) LIKE :ua_inc")
             params["ua_inc"] = f"%{ua_include.lower()}%"
         if client_filter == "browser":
-            clauses.append("COALESCE(on_browser, 0) = 1")
+            clauses.append("on_browser = 1")
         elif client_filter == "api":
-            clauses.append("COALESCE(on_browser, 0) = 0")
+            clauses.append("on_browser = 0")
         if rerank_filter in ("true", "false", "unset"):
             clauses.append(f"{rerank_expr} = :rerank_filter")
             params["rerank_filter"] = rerank_filter
@@ -129,8 +129,8 @@ class AnalyticsQueryService:
         q = text(
             """
             SELECT
-                COALESCE(SUM(CASE WHEN COALESCE(on_browser, 0) = 1 THEN 1 ELSE 0 END), 0) AS browser,
-                COALESCE(SUM(CASE WHEN COALESCE(on_browser, 0) = 0 THEN 1 ELSE 0 END), 0) AS api
+                COALESCE(SUM(CASE WHEN on_browser = 1 THEN 1 ELSE 0 END), 0) AS browser,
+                COALESCE(SUM(CASE WHEN on_browser = 0 THEN 1 ELSE 0 END), 0) AS api
             FROM requests
             WHERE route = '/'
               AND timestamp BETWEEN :start AND :end
@@ -165,7 +165,7 @@ class AnalyticsQueryService:
                 f"""
                 SELECT
                     CASE
-                        WHEN COALESCE(on_browser, 0) = 1 THEN 'browser'
+                        WHEN on_browser = 1 THEN 'browser'
                         ELSE 'api'
                     END AS client,
                     user_agent_hash,
@@ -201,7 +201,7 @@ class AnalyticsQueryService:
             FROM (
                 SELECT
                     CASE
-                        WHEN COALESCE(on_browser, 0) = 1 THEN 'browser'
+                        WHEN on_browser = 1 THEN 'browser'
                         ELSE 'api'
                     END AS client,
                     user_agent_hash
@@ -229,8 +229,8 @@ class AnalyticsQueryService:
         q = text(
             f"""
             SELECT
-                COALESCE(SUM(CASE WHEN COALESCE(on_browser, 0) = 1 THEN 1 ELSE 0 END), 0) AS browser,
-                COALESCE(SUM(CASE WHEN COALESCE(on_browser, 0) = 0 THEN 1 ELSE 0 END), 0) AS api
+                COALESCE(SUM(CASE WHEN on_browser = 1 THEN 1 ELSE 0 END), 0) AS browser,
+                COALESCE(SUM(CASE WHEN on_browser = 0 THEN 1 ELSE 0 END), 0) AS api
             FROM requests
             WHERE route IN {AnalyticsQueryService.VECTOR_QUERY_ROUTES_SQL}
               AND timestamp BETWEEN :start AND :end
@@ -300,8 +300,8 @@ class AnalyticsQueryService:
                   ON h.user_agent_hash = r.user_agent_hash
                 WHERE r.route IN {AnalyticsQueryService.VECTOR_QUERY_ROUTES_SQL}
                   AND r.timestamp BETWEEN :start AND :end
-                  AND COALESCE(r.on_browser, 0) = 0
-                  AND h.first_seen BETWEEN :start AND :end
+                  AND r.on_browser = 0
+                  AND h.query_first_seen BETWEEN :start AND :end
                 GROUP BY r.user_agent_hash
                 ORDER BY r.user_agent_hash
                 """
@@ -323,8 +323,8 @@ class AnalyticsQueryService:
                   ON h.user_agent_hash = r.user_agent_hash
                 WHERE r.route IN {AnalyticsQueryService.VECTOR_QUERY_ROUTES_SQL}
                   AND r.timestamp BETWEEN :start AND :end
-                  AND COALESCE(r.on_browser, 0) = 0
-                  AND h.first_seen BETWEEN :start AND :end
+                  AND r.on_browser = 0
+                  AND h.query_first_seen BETWEEN :start AND :end
                 GROUP BY r.user_agent_hash
             ) AS t
             """
@@ -359,8 +359,8 @@ class AnalyticsQueryService:
                   ON h.user_agent_hash = r.user_agent_hash
                 WHERE r.route IN {AnalyticsQueryService.VECTOR_QUERY_ROUTES_SQL}
                   AND r.timestamp BETWEEN :start AND :end
-                  AND COALESCE(r.on_browser, 0) = 0
-                  AND h.distinct_days >= :min_days
+                  AND r.on_browser = 0
+                  AND h.query_distinct_days >= :min_days
                 GROUP BY r.user_agent_hash
                 ORDER BY r.user_agent_hash
                 """
@@ -382,8 +382,8 @@ class AnalyticsQueryService:
                   ON h.user_agent_hash = r.user_agent_hash
                 WHERE r.route IN {AnalyticsQueryService.VECTOR_QUERY_ROUTES_SQL}
                   AND r.timestamp BETWEEN :start AND :end
-                  AND COALESCE(r.on_browser, 0) = 0
-                  AND h.distinct_days >= :min_days
+                  AND r.on_browser = 0
+                  AND h.query_distinct_days >= :min_days
                 GROUP BY r.user_agent_hash
             ) AS t
             """

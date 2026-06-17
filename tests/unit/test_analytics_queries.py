@@ -205,7 +205,7 @@ def test_vector_route_queries_filter_to_vector_routes(monkeypatch, call):
                 datetime(2026, 4, 23),
                 include_user_agents=True,
             ),
-            "h.first_seen BETWEEN :start AND :end",
+            "h.query_first_seen BETWEEN :start AND :end",
         ),
         (
             lambda: AnalyticsQueryService.get_new_user_agents(
@@ -213,7 +213,7 @@ def test_vector_route_queries_filter_to_vector_routes(monkeypatch, call):
                 datetime(2026, 4, 23),
                 include_user_agents=False,
             ),
-            "h.first_seen BETWEEN :start AND :end",
+            "h.query_first_seen BETWEEN :start AND :end",
         ),
         (
             lambda: AnalyticsQueryService.get_consistent_user_agents(
@@ -221,7 +221,7 @@ def test_vector_route_queries_filter_to_vector_routes(monkeypatch, call):
                 datetime(2026, 4, 23),
                 include_user_agents=True,
             ),
-            "h.distinct_days >= :min_days",
+            "h.query_distinct_days >= :min_days",
         ),
         (
             lambda: AnalyticsQueryService.get_consistent_user_agents(
@@ -229,12 +229,12 @@ def test_vector_route_queries_filter_to_vector_routes(monkeypatch, call):
                 datetime(2026, 4, 23),
                 include_user_agents=False,
             ),
-            "h.distinct_days >= :min_days",
+            "h.query_distinct_days >= :min_days",
         ),
     ],
 )
 def test_cross_history_user_agent_analytics_use_history_table(monkeypatch, call, history_filter):
-    """Use aggregated user-agent history for first-seen and consistency checks."""
+    """Use query-scoped user-agent history for first-seen and consistency checks."""
     captured = _capture_sql(monkeypatch, pd.DataFrame())
     call()
     assert "JOIN user_agent_history AS h" in captured["query"]

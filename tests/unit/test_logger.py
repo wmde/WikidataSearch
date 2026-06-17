@@ -111,6 +111,44 @@ def test_build_from_requests_uses_idempotent_merge(monkeypatch):
     assert "on_browser = on_browser OR VALUES(on_browser)" in statement
     assert "distinct_days = GREATEST(distinct_days, VALUES(distinct_days))" in statement
     assert "total_requests = GREATEST(total_requests, VALUES(total_requests))" in statement
+    assert "query_first_seen" in statement
+    assert "query_last_seen" in statement
+    assert "query_distinct_days = GREATEST(query_distinct_days, VALUES(query_distinct_days))" in statement
+    assert "query_total_requests = GREATEST(query_total_requests, VALUES(query_total_requests))" in statement
+
+
+def test_user_agent_history_indexes_match_query_analytics(monkeypatch):
+    """Index query-scoped history fields used by analytics."""
+    logger, _connection = load_logger(monkeypatch)
+
+    indexes = {
+        index.name: tuple(column.name for column in index.columns)
+        for index in logger.UserAgents.__table__.indexes
+    }
+
+    assert indexes == {
+        "ix_user_agent_history_query_distinct_days": ("query_distinct_days",),
+        "ix_user_agent_history_query_first_seen": ("query_first_seen",),
+    }
+
+
+def test_request_indexes_match_analytics_and_jobs(monkeypatch):
+    """Keep only request indexes used by analytics and cleanup jobs."""
+    logger, _connection = load_logger(monkeypatch)
+
+    indexes = {
+        index.name: tuple(column.name for column in index.columns)
+        for index in logger.Logger.__table__.indexes
+    }
+
+    assert indexes == {
+        "ix_requests_redacted_id": ("is_redacted", "id"),
+        "ix_requests_redaction_scan": ("is_redacted", "timestamp", "id"),
+        "ix_requests_route_timestamp": ("route", "timestamp"),
+        "ix_requests_status_timestamp": ("status", "timestamp"),
+        "ix_requests_timestamp": ("timestamp",),
+        "ix_requests_user_agent_hash": ("user_agent_hash",),
+    }
 
 
 def test_existing_history_skips_automatic_full_log_scan(monkeypatch):

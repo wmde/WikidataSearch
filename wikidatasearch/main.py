@@ -10,7 +10,6 @@ from .config import settings
 from .dependencies import register_rate_limit, verify_admin_auth
 from .routes import frontend, health, item, property, similarity
 from .routes.admin import analytics_api_router, build_analytics_app
-from .services.logger.database import initialize_database
 
 app = FastAPI(
     title="Wikidata Vector Search",
@@ -38,7 +37,6 @@ register_rate_limit(app)
 @app.on_event("startup")
 async def startup_event():
     """Initialize the FastAPI cache at startup."""
-    initialize_database()
     FastAPICache.init(InMemoryBackend(), prefix="wikidata-cache")
 
 

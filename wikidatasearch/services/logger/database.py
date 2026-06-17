@@ -16,11 +16,9 @@ from sqlalchemy import (
     Integer,
     String,
     Text,
+    bindparam,
     create_engine,
     text,
-)
-from sqlalchemy import (
-    inspect as sqlalchemy_inspect,
 )
 from sqlalchemy.dialects.mysql import JSON
 from sqlalchemy.orm import declarative_base, sessionmaker
@@ -57,21 +55,23 @@ class Logger(Base):
     """Logging model for user requests."""
 
     __tablename__ = "requests"
+    QUERY_ROUTES = ("/item/query/", "/property/query/", "/similarity-score/")
     __table_args__ = (
         Index("ix_requests_route_timestamp", "route", "timestamp"),
         Index("ix_requests_status_timestamp", "status", "timestamp"),
         Index("ix_requests_redaction_scan", "is_redacted", "timestamp", "id"),
+        Index("ix_requests_redacted_id", "is_redacted", "id"),
         {"mysql_charset": "utf8mb4"},
     )
 
     id = Column(Integer, primary_key=True)
     timestamp = Column(DateTime, default=datetime.utcnow, index=True, nullable=False)
-    route = Column(String(128), index=True, nullable=False)
+    route = Column(String(128), nullable=False)
     parameters = Column(JSON, default=dict, nullable=False)
-    status = Column(Integer, index=True, nullable=False)
+    status = Column(Integer, nullable=False)
     error = Column(Text)
     response_time = Column(Float, nullable=False)
-    is_redacted = Column(Boolean, default=False, index=True, nullable=False)
+    is_redacted = Column(Boolean, default=False, nullable=False)
 
     # User Agent
     user_agent = Column(String(255))
@@ -80,7 +80,7 @@ class Logger(Base):
 
     # For queries
     query = Column(Text)
-    query_hash = Column(String(64), index=True, nullable=False)
+    query_hash = Column(String(64), nullable=False)
     query_length = Column(Integer, nullable=False, default=0)
     query_words = Column(Integer, nullable=False, default=0)
 
@@ -132,6 +132,7 @@ class Logger(Base):
                     user_agent_hash=user_agent_hash,
                     seen_at=timestamp,
                     on_browser=on_browser,
+                    is_query_route=request.url.path in Logger.QUERY_ROUTES,
                 )
                 session.commit()
             except Exception:
@@ -187,21 +188,28 @@ class UserAgents(Base):
 
     __tablename__ = "user_agent_history"
     __table_args__ = (
-        Index("ix_user_agent_history_first_seen", "first_seen"),
-        Index("ix_user_agent_history_last_seen", "last_seen"),
-        Index("ix_user_agent_history_on_browser_first_seen", "on_browser", "first_seen"),
+        Index("ix_user_agent_history_query_first_seen", "query_first_seen"),
+        Index("ix_user_agent_history_query_distinct_days", "query_distinct_days"),
         {"mysql_charset": "utf8mb4"},
     )
 
     user_agent_hash = Column(String(64), primary_key=True)
+
+    # Fields for all requests
     first_seen = Column(DateTime, nullable=False)
     last_seen = Column(DateTime, nullable=False)
     on_browser = Column(Boolean, nullable=False)
     distinct_days = Column(Integer, nullable=False, default=0)
     total_requests = Column(BigInteger, nullable=False, default=0)
 
+    # Separate fields for query requests
+    query_first_seen = Column(DateTime)
+    query_last_seen = Column(DateTime)
+    query_distinct_days = Column(Integer, nullable=False, default=0)
+    query_total_requests = Column(BigInteger, nullable=False, default=0)
+
     @staticmethod
-    def add_request(session, user_agent_hash: str, seen_at: datetime, on_browser: bool) -> None:
+    def add_request(session, user_agent_hash: str, seen_at: datetime, on_browser: bool, is_query_route: bool) -> None:
         """Upsert aggregate user-agent history for one logged request."""
         session.execute(
             text(
@@ -212,7 +220,11 @@ class UserAgents(Base):
                     last_seen,
                     on_browser,
                     distinct_days,
-                    total_requests
+                    total_requests,
+                    query_first_seen,
+                    query_last_seen,
+                    query_distinct_days,
+                    query_total_requests
                 )
                 VALUES (
                     :user_agent_hash,
@@ -220,20 +232,44 @@ class UserAgents(Base):
                     :seen_at,
                     :on_browser,
                     1,
-                    1
+                    1,
+                    :query_seen_at,
+                    :query_seen_at,
+                    :query_distinct_days,
+                    :query_total_requests
                 )
                 ON DUPLICATE KEY UPDATE
                     first_seen = LEAST(first_seen, VALUES(first_seen)),
                     distinct_days = distinct_days + IF(DATE(VALUES(last_seen)) > DATE(last_seen), 1, 0),
                     last_seen = GREATEST(last_seen, VALUES(last_seen)),
                     on_browser = on_browser OR VALUES(on_browser),
-                    total_requests = total_requests + 1
+                    total_requests = total_requests + 1,
+                    query_first_seen = CASE
+                        WHEN VALUES(query_first_seen) IS NULL THEN query_first_seen
+                        WHEN query_first_seen IS NULL THEN VALUES(query_first_seen)
+                        ELSE LEAST(query_first_seen, VALUES(query_first_seen))
+                    END,
+                    query_distinct_days = query_distinct_days + IF(
+                        VALUES(query_last_seen) IS NOT NULL
+                        AND (query_last_seen IS NULL OR DATE(VALUES(query_last_seen)) > DATE(query_last_seen)),
+                        1,
+                        0
+                    ),
+                    query_last_seen = CASE
+                        WHEN VALUES(query_last_seen) IS NULL THEN query_last_seen
+                        WHEN query_last_seen IS NULL THEN VALUES(query_last_seen)
+                        ELSE GREATEST(query_last_seen, VALUES(query_last_seen))
+                    END,
+                    query_total_requests = query_total_requests + VALUES(query_total_requests)
                 """
             ),
             {
                 "user_agent_hash": user_agent_hash,
                 "seen_at": seen_at,
                 "on_browser": on_browser,
+                "query_seen_at": seen_at if is_query_route else None,
+                "query_distinct_days": 1 if is_query_route else 0,
+                "query_total_requests": 1 if is_query_route else 0,
             },
         )
 
@@ -246,7 +282,7 @@ class UserAgents(Base):
         being added, making repeated builds safe when requests overlap history.
         """
         with engine.begin() as conn:
-            result = conn.execute(
+            stmt = (
                 text(
                     """
                     INSERT INTO user_agent_history (
@@ -255,7 +291,11 @@ class UserAgents(Base):
                         last_seen,
                         on_browser,
                         distinct_days,
-                        total_requests
+                        total_requests,
+                        query_first_seen,
+                        query_last_seen,
+                        query_distinct_days,
+                        query_total_requests
                     )
                     SELECT
                         user_agent_hash,
@@ -263,19 +303,39 @@ class UserAgents(Base):
                         MAX(timestamp) AS last_seen,
                         MAX(COALESCE(on_browser, 0)) AS on_browser,
                         COUNT(DISTINCT DATE(timestamp)) AS distinct_days,
-                        COUNT(*) AS total_requests
+                        COUNT(*) AS total_requests,
+                        MIN(CASE WHEN route IN :query_routes THEN timestamp END) AS query_first_seen,
+                        MAX(CASE WHEN route IN :query_routes THEN timestamp END) AS query_last_seen,
+                        COUNT(DISTINCT CASE WHEN route IN :query_routes THEN DATE(timestamp) END)
+                            AS query_distinct_days,
+                        SUM(CASE WHEN route IN :query_routes THEN 1 ELSE 0 END) AS query_total_requests
                     FROM requests
-                    WHERE user_agent_hash IS NOT NULL
-                      AND user_agent_hash != ''
                     GROUP BY user_agent_hash
                     ON DUPLICATE KEY UPDATE
                         first_seen = LEAST(first_seen, VALUES(first_seen)),
                         last_seen = GREATEST(last_seen, VALUES(last_seen)),
                         on_browser = on_browser OR VALUES(on_browser),
                         distinct_days = GREATEST(distinct_days, VALUES(distinct_days)),
-                        total_requests = GREATEST(total_requests, VALUES(total_requests))
+                        total_requests = GREATEST(total_requests, VALUES(total_requests)),
+                        query_first_seen = CASE
+                            WHEN VALUES(query_first_seen) IS NULL THEN query_first_seen
+                            WHEN query_first_seen IS NULL THEN VALUES(query_first_seen)
+                            ELSE LEAST(query_first_seen, VALUES(query_first_seen))
+                        END,
+                        query_last_seen = CASE
+                            WHEN VALUES(query_last_seen) IS NULL THEN query_last_seen
+                            WHEN query_last_seen IS NULL THEN VALUES(query_last_seen)
+                            ELSE GREATEST(query_last_seen, VALUES(query_last_seen))
+                        END,
+                        query_distinct_days = GREATEST(query_distinct_days, VALUES(query_distinct_days)),
+                        query_total_requests = GREATEST(query_total_requests, VALUES(query_total_requests))
                     """
                 )
+                .bindparams(bindparam("query_routes", expanding=True))
+            )
+            result = conn.execute(
+                stmt,
+                {"query_routes": list(Logger.QUERY_ROUTES)},
             )
             return max(0, int(result.rowcount or 0))
 
@@ -319,19 +379,3 @@ class Feedback(Base):
             except Exception:
                 session.rollback()
                 traceback.print_exc()
-
-
-def initialize_database():
-    """Create tables if they do not already exist."""
-    try:
-        user_agent_history_exists = sqlalchemy_inspect(engine).has_table(UserAgents.__tablename__)
-
-        Base.metadata.create_all(engine)
-
-        if not user_agent_history_exists:
-            UserAgents.build_from_requests()
-
-        return True
-    except Exception as e:
-        print(f"Error while initializing labels database: {e}")
-        return False
