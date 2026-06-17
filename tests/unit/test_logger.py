@@ -122,8 +122,7 @@ def test_user_agent_history_indexes_match_query_analytics(monkeypatch):
     logger, _connection = load_logger(monkeypatch)
 
     indexes = {
-        index.name: tuple(column.name for column in index.columns)
-        for index in logger.UserAgents.__table__.indexes
+        index.name: tuple(column.name for column in index.columns) for index in logger.UserAgents.__table__.indexes
     }
 
     assert indexes == {
@@ -136,10 +135,7 @@ def test_request_indexes_match_analytics_and_jobs(monkeypatch):
     """Keep only request indexes used by analytics and cleanup jobs."""
     logger, _connection = load_logger(monkeypatch)
 
-    indexes = {
-        index.name: tuple(column.name for column in index.columns)
-        for index in logger.Logger.__table__.indexes
-    }
+    indexes = {index.name: tuple(column.name for column in index.columns) for index in logger.Logger.__table__.indexes}
 
     assert indexes == {
         "ix_requests_redacted_id": ("is_redacted", "id"),

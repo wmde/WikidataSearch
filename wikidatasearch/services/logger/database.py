@@ -282,9 +282,8 @@ class UserAgents(Base):
         being added, making repeated builds safe when requests overlap history.
         """
         with engine.begin() as conn:
-            stmt = (
-                text(
-                    """
+            stmt = text(
+                """
                     INSERT INTO user_agent_history (
                         user_agent_hash,
                         first_seen,
@@ -330,9 +329,7 @@ class UserAgents(Base):
                         query_distinct_days = GREATEST(query_distinct_days, VALUES(query_distinct_days)),
                         query_total_requests = GREATEST(query_total_requests, VALUES(query_total_requests))
                     """
-                )
-                .bindparams(bindparam("query_routes", expanding=True))
-            )
+            ).bindparams(bindparam("query_routes", expanding=True))
             result = conn.execute(
                 stmt,
                 {"query_routes": list(Logger.QUERY_ROUTES)},
