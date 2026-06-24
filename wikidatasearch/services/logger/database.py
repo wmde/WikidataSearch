@@ -100,6 +100,19 @@ class Logger(Base):
                 user_agent = request.headers.get("user-agent", "unknown")[:255]
                 user_agent_hash = sha256(user_agent.encode("utf-8")).hexdigest()
                 on_browser = "Mozilla" in user_agent
+                is_query_route = request.url.path in Logger.QUERY_ROUTES
+
+                if status_code == 429:
+                    UserAgents.add_request(
+                        session=session,
+                        user_agent_hash=user_agent_hash,
+                        seen_at=timestamp,
+                        on_browser=on_browser,
+                        is_query_route=is_query_route,
+                        is_rate_limited=True,
+                    )
+                    session.commit()
+                    return
 
                 query = request.query_params.get("query", "")
                 query_hash = sha256(query.encode("utf-8")).hexdigest()
@@ -132,7 +145,7 @@ class Logger(Base):
                     user_agent_hash=user_agent_hash,
                     seen_at=timestamp,
                     on_browser=on_browser,
-                    is_query_route=request.url.path in Logger.QUERY_ROUTES,
+                    is_query_route=is_query_route,
                 )
                 session.commit()
             except Exception:
@@ -207,9 +220,17 @@ class UserAgents(Base):
     query_last_seen = Column(DateTime)
     query_distinct_days = Column(Integer, nullable=False, default=0)
     query_total_requests = Column(BigInteger, nullable=False, default=0)
+    rate_limit_requests = Column(BigInteger, nullable=False, default=0)
 
     @staticmethod
-    def add_request(session, user_agent_hash: str, seen_at: datetime, on_browser: bool, is_query_route: bool) -> None:
+    def add_request(
+        session,
+        user_agent_hash: str,
+        seen_at: datetime,
+        on_browser: bool,
+        is_query_route: bool,
+        is_rate_limited: bool = False,
+    ) -> None:
         """Upsert aggregate user-agent history for one logged request."""
         session.execute(
             text(
@@ -224,7 +245,8 @@ class UserAgents(Base):
                     query_first_seen,
                     query_last_seen,
                     query_distinct_days,
-                    query_total_requests
+                    query_total_requests,
+                    rate_limit_requests
                 )
                 VALUES (
                     :user_agent_hash,
@@ -236,7 +258,8 @@ class UserAgents(Base):
                     :query_seen_at,
                     :query_seen_at,
                     :query_distinct_days,
-                    :query_total_requests
+                    :query_total_requests,
+                    :rate_limit_requests
                 )
                 ON DUPLICATE KEY UPDATE
                     first_seen = LEAST(first_seen, VALUES(first_seen)),
@@ -260,7 +283,8 @@ class UserAgents(Base):
                         WHEN query_last_seen IS NULL THEN VALUES(query_last_seen)
                         ELSE GREATEST(query_last_seen, VALUES(query_last_seen))
                     END,
-                    query_total_requests = query_total_requests + VALUES(query_total_requests)
+                    query_total_requests = query_total_requests + VALUES(query_total_requests),
+                    rate_limit_requests = rate_limit_requests + VALUES(rate_limit_requests)
                 """
             ),
             {
@@ -270,6 +294,7 @@ class UserAgents(Base):
                 "query_seen_at": seen_at if is_query_route else None,
                 "query_distinct_days": 1 if is_query_route else 0,
                 "query_total_requests": 1 if is_query_route else 0,
+                "rate_limit_requests": 1 if is_rate_limited else 0,
             },
         )
 
@@ -294,7 +319,8 @@ class UserAgents(Base):
                         query_first_seen,
                         query_last_seen,
                         query_distinct_days,
-                        query_total_requests
+                        query_total_requests,
+                        rate_limit_requests
                     )
                     SELECT
                         user_agent_hash,
@@ -307,7 +333,8 @@ class UserAgents(Base):
                         MAX(CASE WHEN route IN :query_routes THEN timestamp END) AS query_last_seen,
                         COUNT(DISTINCT CASE WHEN route IN :query_routes THEN DATE(timestamp) END)
                             AS query_distinct_days,
-                        SUM(CASE WHEN route IN :query_routes THEN 1 ELSE 0 END) AS query_total_requests
+                        SUM(CASE WHEN route IN :query_routes THEN 1 ELSE 0 END) AS query_total_requests,
+                        SUM(CASE WHEN status = 429 THEN 1 ELSE 0 END) AS rate_limit_requests
                     FROM requests
                     GROUP BY user_agent_hash
                     ON DUPLICATE KEY UPDATE
@@ -327,7 +354,8 @@ class UserAgents(Base):
                             ELSE GREATEST(query_last_seen, VALUES(query_last_seen))
                         END,
                         query_distinct_days = GREATEST(query_distinct_days, VALUES(query_distinct_days)),
-                        query_total_requests = GREATEST(query_total_requests, VALUES(query_total_requests))
+                        query_total_requests = GREATEST(query_total_requests, VALUES(query_total_requests)),
+                        rate_limit_requests = GREATEST(rate_limit_requests, VALUES(rate_limit_requests))
                     """
             ).bindparams(bindparam("query_routes", expanding=True))
             result = conn.execute(
