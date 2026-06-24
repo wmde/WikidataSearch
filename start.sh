@@ -1,14 +1,16 @@
-#!/bin/bash
-
+#!/bin/sh
 set -e
 
-set -a
-source .env
-set +a
+uv run python -m jobs.initialize_database
 
-echo "API_SECRET set to ${API_SECRET}"
-
-cd /workspace
-
-echo "Starting api"
-exec uvicorn wikidatasearch:app --reload --host 0.0.0.0 --port 8000
+exec uv run gunicorn wikidatasearch:app \
+    --bind 0.0.0.0:8080 \
+    -k uvicorn.workers.UvicornWorker \
+    -w 6 \
+    --timeout 120 \
+    --graceful-timeout 30 \
+    --keep-alive 10 \
+    --max-requests 1000 \
+    --max-requests-jitter 200 \
+    --access-logfile - \
+    --error-logfile -

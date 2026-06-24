@@ -47,9 +47,42 @@ services:
     ports:
       - "8080:8080"
     healthcheck:
-      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8080/health/ready || exit 1"]
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8080/health/live || exit 1"]
       interval: 15s
       timeout: 3s
       retries: 3
       start_period: 30s
+    restart: unless-stopped
+
+  redaction-scheduler:
+    build: .
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+    # Search credentials are required while importing application configuration
+      ASTRA_DB_APPLICATION_TOKEN: ${ASTRA_DB_APPLICATION_TOKEN}
+      ASTRA_DB_API_ENDPOINT: ${ASTRA_DB_API_ENDPOINT}
+      ASTRA_DB_DATABASE_ID: ${ASTRA_DB_DATABASE_ID}
+      ASTRA_DB_KEYSPACE: ${ASTRA_DB_KEYSPACE}
+      ASTRA_DB_COLLECTION: ${ASTRA_DB_COLLECTION}
+      JINA_API_KEY: ${JINA_API_KEY}
+    # DB + redaction settings
+      DB_NAME: ${DB_NAME}
+      DB_USER: ${DB_USER}
+      DB_PASS: ${DB_PASS}
+      DB_HOST: requestsDB
+      DB_PORT: ${DB_PORT:-3306}
+      LOG_DB_POOL_SIZE: ${LOG_DB_POOL_SIZE:-2}
+      LOG_DB_MAX_OVERFLOW: ${LOG_DB_MAX_OVERFLOW:-1}
+      LOG_DB_POOL_TIMEOUT: ${LOG_DB_POOL_TIMEOUT:-10}
+      LOG_DB_POOL_RECYCLE: ${LOG_DB_POOL_RECYCLE:-1800}
+      REDACTION_DAYS: ${REDACTION_DAYS:-90}
+      REDACTION_BATCH_SIZE: ${REDACTION_BATCH_SIZE:-2000}
+    container_name: redaction-scheduler
+    command: [ "supercronic", "/workspace/jobs/redact.cron" ]
+    volumes:
+      - "./wikidatasearch:/workspace/wikidatasearch"
+      - "./jobs:/workspace/jobs"
+      - "./data:/workspace/data"
     restart: unless-stopped

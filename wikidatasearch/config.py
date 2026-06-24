@@ -10,7 +10,7 @@ class Settings(BaseSettings):
 
     FRONTEND_STATIC_DIR: str = "./frontend/dist"
     CACHE_TTL: int = 180  # 3 minutes
-    RATE_LIMIT: str = "30/minute"
+    RATE_LIMIT: str = "5/minute"  # 5 per worker, 30 total
     DEST_LANG: str = "en"
     MAX_VECTORDB_K: int = 50
     VECTORDb_LANGS: list[str] = ["en", "fr", "ar", "de"]
@@ -34,6 +34,12 @@ class Settings(BaseSettings):
     DB_PASS: str = ""
     DB_HOST: str = "requestsDB"
     DB_PORT: int = 3306
+    LOG_DB_POOL_SIZE: int = 10
+    LOG_DB_MAX_OVERFLOW: int = 5
+    LOG_DB_POOL_TIMEOUT: int = 10
+    LOG_DB_POOL_RECYCLE: int = 1800
+    REDACTION_DAYS: int = 90
+    REDACTION_BATCH_SIZE: int = 2000
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 
