@@ -13,7 +13,8 @@ class Settings(BaseSettings):
     RATE_LIMIT: str = "5/minute"  # 5 per worker, 30 total
     DEST_LANG: str = "en"
     MAX_VECTORDB_K: int = 50
-    VECTORDb_LANGS: list[str] = ["en", "fr", "ar", "de"]
+    VECTORDB_LANGS: list[str] = ["en", "fr", "ar", "de"]
+    VECTORDB_NO_SITELINKS_LANGS: list[str] = ["en"]
 
     # --- From .env ---
     ASTRA_DB_APPLICATION_TOKEN: str | None = None
@@ -57,6 +58,7 @@ SEARCH = HybridSearch(
         "JINA_API_KEY": settings.JINA_API_KEY,
     },
     dest_lang=settings.DEST_LANG,
-    vectordb_langs=settings.VECTORDb_LANGS,
+    vectordb_langs=settings.VECTORDB_LANGS,
+    vectordb_no_sitelinks_langs=settings.VECTORDB_NO_SITELINKS_LANGS,
     max_K=settings.MAX_VECTORDB_K,
 )

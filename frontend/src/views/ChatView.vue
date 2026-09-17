@@ -195,6 +195,42 @@
               </div>
             </div>
 
+            <!-- Item scope toggle -->
+            <div v-if="searchType === 'item'" class="flex items-center gap-2 relative group">
+              <span class="font-medium">Scope:</span>
+              <div class="inline-flex h-8 rounded-lg overflow-hidden border border-light-distinct-text dark:border-dark-distinct-text">
+                <button
+                  v-for="option in itemScopeOptions"
+                  :key="option.value"
+                  class="px-3 h-full flex items-center text-base font-medium"
+                  :class="itemScope === option.value
+                    ? 'bg-light-menu dark:bg-dark-menu text-light-text dark:text-dark-text'
+                    : 'bg-transparent text-light-distinct-text dark:text-dark-distinct-text'"
+                  :aria-pressed="itemScope === option.value"
+                  @click="itemScope = option.value"
+                  type="button"
+                >
+                  {{ option.label }}
+                </button>
+              </div>
+
+              <div>
+                <Icon
+                  icon="fluent:info-16-regular"
+                  class="text-blue-600 dark:text-blue-400 cursor-pointer ml-1"
+                />
+                <div
+                  class="absolute left-1/2 -translate-x-1/2 top-full mt-1 w-80 p-3 bg-light-menu dark:bg-dark-menu text-sm text-light-text dark:text-dark-text rounded shadow-lg opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity z-10 pointer-events-none"
+                  role="tooltip"
+                >
+                  <p class="font-semibold mb-2">Item Scope Info</p>
+                  <p><strong>With sitelinks</strong> searches items linked to Wikipedia pages.</p>
+                  <p><strong>No sitelinks</strong> searches items without linked Wikipedia pages.</p>
+                  <p><strong>All</strong> searches both kinds of items.</p>
+                </div>
+              </div>
+            </div>
+
           </div>
 
           <!-- Rerank toggle -->
@@ -273,6 +309,12 @@ const displayResponse = ref(false)
 const inputFocused = ref(false)
 const showSettings = ref(true)
 const searchType = ref<'item' | 'property'>('item')
+const itemScope = ref<'with_sitelinks' | 'no_sitelinks' | 'all'>('with_sitelinks')
+const itemScopeOptions = [
+  { value: 'with_sitelinks' as const, label: 'With sitelinks' },
+  { value: 'no_sitelinks' as const, label: 'No sitelinks' },
+  { value: 'all' as const, label: 'All' },
+]
 const useRerank = ref(false)
 
 // Languages
@@ -309,6 +351,9 @@ async function search() {
       lang,
       rerank: String(useRerank.value),
     })
+    if (searchType.value === 'item') {
+      params.set('scope', itemScope.value)
+    }
     const fetchResult = await fetch(`${base}/?${params.toString()}`)
 
     const jsonResponse = await fetchResult.json()

@@ -27,6 +27,7 @@ def test_item_query_route_returns_items_and_sets_item_filter(test_ctx, run_async
             BackgroundTasks(),
             query="Douglas Adams",
             lang="all",
+            scope="no_sitelinks",
             K=5,
             instanceof=None,
             rerank=False,
@@ -38,6 +39,7 @@ def test_item_query_route_returns_items_and_sets_item_filter(test_ctx, run_async
     assert last_call["name"] == "search"
     assert last_call["kwargs"]["filter"]["metadata.IsItem"] is True
     assert last_call["kwargs"]["lang"] == "all"
+    assert last_call["kwargs"]["scope"] == "no_sitelinks"
     assert last_call["kwargs"]["ks_K"] == 1
 
 
@@ -77,6 +79,7 @@ def test_item_query_route_lowercases_lang_and_uses_expected_ks_k(test_ctx, run_a
             BackgroundTasks(),
             query="Douglas Adams",
             lang="EN",
+            scope="with_sitelinks",
             K=11,
             instanceof=None,
             rerank=False,
@@ -134,6 +137,7 @@ def test_similarity_score_route_returns_qids_and_pids(test_ctx, run_async, make_
     last_call = test_ctx["search"].calls[-1]
     assert last_call["name"] == "get_similarity_scores"
     assert last_call["kwargs"]["lang"] == "all"
+    assert last_call["kwargs"]["scope"] == "all"
 
 
 def test_similarity_score_route_rejects_too_many_ids_with_422(test_ctx, run_async, make_request):
@@ -166,6 +170,7 @@ def test_similarity_score_route_rejects_too_many_ids_with_422(test_ctx, run_asyn
             {
                 "query": "Douglas Adams",
                 "lang": "all",
+                "scope": "with_sitelinks",
                 "K": 5,
                 "instanceof": None,
                 "rerank": False,
@@ -238,6 +243,7 @@ def test_item_query_route_rejects_invalid_instanceof(test_ctx, run_async, make_r
                 BackgroundTasks(),
                 query="Douglas Adams",
                 lang="all",
+                scope="with_sitelinks",
                 K=5,
                 instanceof=" , , ",
                 rerank=False,

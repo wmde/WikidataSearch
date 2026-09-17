@@ -11,7 +11,7 @@ from ...services.logger.gradio_utils import run_query
 ROUTES_CHOICES = ["/", "/item/query/", "/property/query/", "/similarity-score/"]
 RERANK_CHOICES = ["any", "true", "false", "unset"]
 STATUS_CHOICES = ["200", "400", "422", "429", "500"]
-LANG_CHOICES = ["all", "translated"] + settings.VECTORDb_LANGS
+LANG_CHOICES = ["all", "translated"] + settings.VECTORDB_LANGS
 CLIENT_CHOICES = ["all", "browser", "api"]
 PERIOD_CHOICES = ["Hour", "Day", "Week", "Month"]
 GROUP_BY_CHOICES = ["None", "route", "user_agent", "status", "rerank", "lang", "client"]

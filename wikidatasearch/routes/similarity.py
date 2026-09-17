@@ -128,6 +128,7 @@ async def similarity_score_route(
             query=query,
             qids=qids,
             lang=lang,
+            scope="all",
             return_vectors=return_vectors,
         )
 

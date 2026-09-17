@@ -2,7 +2,7 @@
 
 import time
 import traceback
-from typing import List, Optional
+from typing import List, Literal, Optional
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Request
 from fastapi_cache.decorator import cache
@@ -71,6 +71,13 @@ async def item_query_route(
         "all",
         description='Language code for the query. Use "all" to search across all vectors.',
     ),
+    scope: Literal["with_sitelinks", "no_sitelinks", "all"] = Query(
+        "with_sitelinks",
+        description=(
+            "Controls which Wikidata items are searched: `with_sitelinks` searches items linked to Wikipedia "
+            "pages; `no_sitelinks` searches items without linked Wikipedia pages; `all` searches both."
+        ),
+    ),
     K: int = Query(
         settings.MAX_VECTORDB_K,
         ge=1,
@@ -96,6 +103,11 @@ async def item_query_route(
       Use `"all"` to search across all vectors in the database.
       If a specific language is provided, only vectors in that language are searched.
       If no vectors exist for that language, the query is translated to English and searched against all vectors.
+    - **scope** (str): Controls which Wikidata items are searched. Defaults to `"with_sitelinks"`.
+      - `"with_sitelinks"`: Search items linked to Wikipedia pages.
+      - `"no_sitelinks"`: Search items without linked Wikipedia pages.
+      - `"all"`: Search both kinds of items. No-sitelink collections are included regardless of the selected
+        language.
     - **K** (int): Number of top results to return.
     - **instanceof** (str, optional): Comma-separated list of QIDs to filter by a specific "instance of" class.
     - **rerank** (bool): If `true`, apply a reranker model (slower).
@@ -139,6 +151,7 @@ async def item_query_route(
             query,
             filter=filt,
             lang=lang.lower(),
+            scope=scope,
             vs_K=K,
             ks_K=max(1, (K + 9) // 10),
             rerank=rerank,

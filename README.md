@@ -40,6 +40,10 @@ Parameters:
 
 - `query` (required): natural-language query or ID.
 - `lang` (default: `all`): vector shard language; unknown languages are translated then searched globally.
+- `scope` (default: `with_sitelinks`): controls which Wikidata items are searched:
+  - `with_sitelinks`: items linked to Wikipedia pages.
+  - `no_sitelinks`: items without linked Wikipedia pages.
+  - `all`: both kinds of items; no-sitelink collections are included for every selected language.
 - `K` (default/max: `50`): number of top results requested.
 - `instanceof` (optional): comma-separated QIDs used as `P31` filter.
 - `rerank` (default: `false`): apply reranker on textified Wikidata content.
@@ -126,7 +130,7 @@ High-level request flow:
 2. `HybridSearch` orchestrates retrieval:
    - Vector path: embeds query with Jina embeddings and searches Astra DB vector collections across language shards in parallel.
    - Keyword path: runs Wikidata keyword search against `wikidata.org`.
-3. Results are fused with Reciprocal Rank Fusion (RRF), preserving source attribution.
+3. Vector results are merged by maximum similarity, then fused with keyword results using RRF.
 4. Optional reranking fetches Wikidata text representations and reorders top hits with Jina reranker.
 5. JSON response is returned and request metadata is logged for analytics.
 
