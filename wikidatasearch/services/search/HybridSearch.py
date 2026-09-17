@@ -411,9 +411,7 @@ class HybridSearch(Search):
         """Score item and property IDs in their respective collections for one language shard."""
         shard_embedding = embedding
         if shard_embedding is None:
-            embedding_search = (
-                self.vectorsearch["properties"][lang] if query.startswith("P") else item_vectorsearch
-            )
+            embedding_search = self.vectorsearch["properties"][lang] if query.startswith("P") else item_vectorsearch
             shard_embedding, _ = embedding_search.calculate_embedding(
                 query,
                 lang="all",
