@@ -33,7 +33,7 @@ class KeywordSearch(Search):
 
         # If the query is a QID or PID, return it directly.
         if re.fullmatch(r"[PQ]\d+", query):
-            return [query]
+            return self._postfilter_results([query], filter)[:K]
 
         query = self._clean_query(query, lang)
 
@@ -63,6 +63,28 @@ class KeywordSearch(Search):
         results = results.json()["__main__"]["result"]["hits"]["hits"]
         qids = [item["_source"]["title"] for item in results]
 
+        qids = self._postfilter_results(qids, filter)
+        return qids[:K]
+
+    def _postfilter_results(self, qids: list[str], filter: dict | None = None):
+        """Post-filter the search results based on the provided filter criteria.
+
+        Args:
+            qids (list[str]): List of QIDs or PIDs to filter.
+            filter (dict, optional): Filtering criteria.
+
+        Returns:
+            list: Filtered list of QIDs or PIDs.
+        """
+        filter = filter or {}
+
+        # Exclude entity-type based on the filter criteria
+        if filter.get("metadata.IsProperty", False):
+            qids = [qid for qid in qids if qid.startswith("P")]
+        elif filter.get("metadata.IsItem", False):
+            qids = [qid for qid in qids if qid.startswith("Q")]
+
+        # Exclude external-id properties if the filter specifies it
         excludes_external_ids = filter.get("metadata.IsProperty", False) and filter.get("metadata.DataType") == {
             "$ne": "external-id"
         }
@@ -71,7 +93,7 @@ class KeywordSearch(Search):
             datatypes = self._get_property_datatypes(pids)
             qids = [qid for qid in qids if not qid.startswith("P") or datatypes.get(qid) != "external-id"]
 
-        return qids[:K]
+        return qids
 
     def _get_property_datatypes(self, property_ids: list[str]) -> dict[str, str]:
         """Fetch Wikidata property datatypes in API-sized batches."""

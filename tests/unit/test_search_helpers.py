@@ -213,11 +213,34 @@ def test_keyword_search_filters_external_id_properties_after_cirrus_search(test_
     assert calls[1]["params"]["ids"] == "P214|P31"
 
 
-def test_keyword_search_returns_direct_pid_regardless_of_filter(test_ctx):
-    """Validate direct PID searches bypass result filters."""
+def test_keyword_search_filters_direct_ids_by_entity_type(test_ctx):
+    """Validate direct IDs respect item and property search filters."""
     _, KeywordSearch, _ = _service_classes()
 
     keyword = KeywordSearch()
+    cases = [
+        ("Q42", {"metadata.IsProperty": True}, []),
+        ("P31", {"metadata.IsItem": True}, []),
+        ("Q42", {"metadata.IsItem": True}, ["Q42"]),
+        ("P31", {"metadata.IsProperty": True}, ["P31"]),
+    ]
+
+    for query, search_filter, expected in cases:
+        assert keyword.search(query, filter=search_filter, K=1) == expected
+
+
+def test_keyword_search_filters_direct_external_id_property(test_ctx, monkeypatch):
+    """Validate external-ID exclusion also applies to direct PID searches."""
+    _, KeywordSearch, _ = _service_classes()
+
+    keyword = KeywordSearch()
+    datatype_calls = []
+
+    def _fake_datatypes(property_ids):
+        datatype_calls.append(property_ids)
+        return {"P214": "external-id"}
+
+    monkeypatch.setattr(keyword, "_get_property_datatypes", _fake_datatypes)
     results = keyword.search(
         "P214",
         filter={
@@ -227,7 +250,8 @@ def test_keyword_search_returns_direct_pid_regardless_of_filter(test_ctx):
         K=1,
     )
 
-    assert results == ["P214"]
+    assert results == []
+    assert datatype_calls == [["P214"]]
 
 
 def test_keyword_property_datatype_lookup_batches_ids(test_ctx, monkeypatch):
