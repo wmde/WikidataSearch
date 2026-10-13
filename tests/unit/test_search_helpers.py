@@ -129,6 +129,97 @@ def test_reciprocal_rank_fusion_drops_non_positive_similarity(test_ctx):
     assert [row["QID"] for row in fused] == ["Q3"]
 
 
+def test_rerank_textifies_id_query_and_pins_exact_match(test_ctx):
+    """Validate same-type ID queries use text while the exact entity stays first."""
+    HybridSearch, _, _ = _service_classes()
+    hybrid = HybridSearch.__new__(HybridSearch)
+    textify_calls = []
+
+    class _Reranker:
+        """Capture reranker inputs and score non-exact candidates."""
+
+        def __init__(self):
+            """Initialize captured inputs."""
+            self.query = None
+            self.documents = []
+
+        def rerank(self, query, documents):
+            """Capture inputs and return deterministically scored documents."""
+            self.query = query
+            self.documents = [(document.get("QID") or document.get("PID"), document["text"]) for document in documents]
+            documents[0]["reranker_score"] = 0.73
+            return documents
+
+    def _textify(ids, format, lang):
+        textify_calls.append({"ids": ids, "format": format, "lang": lang})
+        return {
+            "Q42": "Douglas Adams | English writer and humorist",
+            "Q5": "human | common name of Homo sapiens",
+        }
+
+    hybrid.embedding_model = _Reranker()
+    hybrid.get_text_by_ids = _textify
+    results = hybrid._rerank_results(
+        "Q42",
+        [
+            {"QID": "Q42", "similarity_score": 1.0},
+            {"QID": "Q5", "similarity_score": 0.8},
+        ],
+        "all",
+    )
+
+    assert textify_calls == [{"ids": ["Q42", "Q5"], "format": "triplet", "lang": "all"}]
+    assert hybrid.embedding_model.query == "Douglas Adams | English writer and humorist"
+    assert hybrid.embedding_model.documents == [("Q5", "human | common name of Homo sapiens")]
+    assert [result["QID"] for result in results] == ["Q42", "Q5"]
+    assert results[0]["reranker_score"] == 1.0
+    assert results[1]["reranker_score"] == 0.73
+    assert all("text" not in result for result in results)
+
+
+def test_rerank_textifies_cross_type_id_without_pinning_it(test_ctx):
+    """Validate cross-type ID queries textify the query without injecting it."""
+    HybridSearch, _, _ = _service_classes()
+    hybrid = HybridSearch.__new__(HybridSearch)
+
+    class _Reranker:
+        """Capture the cross-type query and return property candidates."""
+
+        def __init__(self):
+            """Initialize captured inputs."""
+            self.query = None
+            self.document_ids = []
+
+        def rerank(self, query, documents):
+            """Capture inputs and score property candidates."""
+            self.query = query
+            self.document_ids = [document["PID"] for document in documents]
+            for index, document in enumerate(reversed(documents)):
+                document["reranker_score"] = 0.8 - index * 0.1
+            return list(reversed(documents))
+
+    hybrid.embedding_model = _Reranker()
+    hybrid.get_text_by_ids = lambda ids, format, lang: {
+        "Q42": "Douglas Adams | English writer and humorist",
+        "P50": "author | main creator of a written work",
+        "P106": "occupation | occupation of a person",
+    }
+    results = hybrid._rerank_results(
+        "Q42",
+        [
+            {"PID": "P50", "similarity_score": 0.8},
+            {"PID": "P106", "similarity_score": 0.7},
+        ],
+        "en",
+    )
+
+    assert hybrid.embedding_model.query == "Douglas Adams | English writer and humorist"
+    assert hybrid.embedding_model.document_ids == ["P50", "P106"]
+    assert [result["PID"] for result in results] == ["P106", "P50"]
+    assert all(result["reranker_score"] < 1.0 for result in results)
+    assert all("text" not in result for result in results)
+
+
 def test_keyword_clean_query_removes_stopwords_and_caps_length(test_ctx):
     """Validate KeywordSearch's clean query that removes stopwords and caps length."""
     _, KeywordSearch, _ = _service_classes()

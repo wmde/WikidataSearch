@@ -237,28 +237,57 @@ class HybridSearch(Search):
 
         if rerank:
             # Rerank the results with the current Wikidata values.
-            ids = [r.get("QID", r.get("PID")) for r in results]
-            ids = [rid for rid in ids if rid]
-            if not ids:
-                return results
-
-            wd_data = self.get_text_by_ids(ids, format="triplet", lang=lang)
-            for i in range(len(results)):
-                rid = results[i].get("QID", results[i].get("PID"))
-                if rid in wd_data:
-                    results[i]["text"] = wd_data[rid]
-
-            results = [r for r in results if r.get("text")]
-            if not results:
-                return results
-
-            results = self.embedding_model.rerank(query, results)
-
-            # Remove text from results to reduce payload size
-            for r in results:
-                r.pop("text", None)
+            results = self._rerank_results(query, results, lang)
 
         return results
+
+    def _rerank_results(self, query: str, results: list[dict], lang: str) -> list[dict]:
+        """Rerank candidates, resolving ID queries to text and pinning exact matches.
+
+        Args:
+            query: Natural-language query or Wikidata entity ID.
+            results: Fused item or property search candidates.
+            lang: Preferred language for textification.
+
+        Returns:
+            Reranked candidates without their temporary text representations.
+        """
+        ids = [r.get("QID", r.get("PID")) for r in results]
+        ids = [rid for rid in ids if rid]
+        if not ids:
+            return results
+
+        # If the query is an ID, get its textified version.
+        is_id_query = bool(re.fullmatch(r"[PQ]\d+", query))
+        if is_id_query and query not in ids:
+            ids.append(query)
+
+        wd_data = self.get_text_by_ids(ids, format="triplet", lang=lang)
+        rerank_query = (wd_data.get(query) or query) if is_id_query else query
+        exact_results = []
+        rerank_candidates = []
+
+        for result in results:
+            rid = result.get("QID") or result.get("PID")
+            if is_id_query and rid == query:
+                result["reranker_score"] = 1.0
+                exact_results.append(result)
+
+            elif rid in wd_data:
+                result["text"] = wd_data[rid]
+                rerank_candidates.append(result)
+
+        reranked_results = []
+        if rerank_candidates:
+            reranked_results = self.embedding_model.rerank(rerank_query, rerank_candidates)
+
+        combined_results = exact_results + reranked_results
+
+        # Remove text from results to reduce payload size
+        for result in combined_results:
+            result.pop("text", None)
+
+        return combined_results
 
     def keyword_search(
         self,
