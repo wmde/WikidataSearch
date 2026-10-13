@@ -15,9 +15,11 @@ router = APIRouter(include_in_schema=False)
 
 
 @router.get("/")
+@router.get("/search")
+@router.get("/use-cases")
 @limiter.limit(settings.RATE_LIMIT)
 async def root(request: Request, background_tasks: BackgroundTasks):
-    """Serve the frontend index page."""
+    """Serve the frontend entry point for each client-side route."""
     background_tasks.add_task(Logger.add_request, request, 200, time.time())
     return FileResponse(f"{settings.FRONTEND_STATIC_DIR}/index.html")
 

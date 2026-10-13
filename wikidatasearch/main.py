@@ -50,7 +50,7 @@ app.include_router(health.router)
 frontend.mount_static(app)
 
 if settings.ANALYTICS_API_SECRET:
-    app.include_router(analytics_api_router)
+    app.include_router(analytics_api_router, include_in_schema=False)
     mount_gradio_app(
         app,
         build_analytics_app(),
