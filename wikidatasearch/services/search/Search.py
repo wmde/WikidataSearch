@@ -29,6 +29,7 @@ class Search(ABC):
         ids: list[str],
         format: str = "triplet",
         lang: str = "en",
+        max_length: int = 4096,
     ) -> dict[str, str]:
         """Fetch textual representations for Wikidata entities.
 
@@ -36,6 +37,7 @@ class Search(ABC):
             ids (list[str]): Wikidata entity IDs (QIDs and/or PIDs).
             format (str): Output format requested from the textifier service.
             lang (str): Preferred language code for generated text.
+            max_length (int): Maximum length of the text.
 
         Returns:
             dict[str, str]: Mapping from entity ID to textual representation.
@@ -49,7 +51,16 @@ class Search(ABC):
         text = {}
         for i in range(0, len(ids), 50):
             qid = ",".join(ids[i : i + 50])
-            params = {"id": qid, "lang": lang, "external_ids": False, "format": format}
+            params = {
+                "id": qid,
+                "lang": lang,
+                "external_ids": False,
+                "references": False,
+                "all_ranks": False,
+                "qualifiers": True,
+                "fallback_lang": "any",
+                "format": format,
+            }
             headers = {"User-Agent": "Wikidata Vector Database (embedding@wikimedia.de)"}
 
             url_textifier = settings.WD_TEXTIFIER_API
@@ -57,4 +68,8 @@ class Search(ABC):
             results.raise_for_status()
             text.update(results.json())
 
+        # Limit the length of the text
+        text = {
+            id: value.strip()[:max_length] for id, value in text.items() if isinstance(value, str) and value.strip()
+        }
         return text
