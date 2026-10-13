@@ -266,6 +266,7 @@ class HybridSearch(Search):
         rerank_query = (wd_data.get(query) or query) if is_id_query else query
         exact_results = []
         rerank_candidates = []
+        unranked_results = []
 
         for result in results:
             rid = result.get("QID") or result.get("PID")
@@ -277,11 +278,14 @@ class HybridSearch(Search):
                 result["text"] = wd_data[rid]
                 rerank_candidates.append(result)
 
+            else:
+                unranked_results.append(result)
+
         reranked_results = []
         if rerank_candidates:
             reranked_results = self.embedding_model.rerank(rerank_query, rerank_candidates)
 
-        combined_results = exact_results + reranked_results
+        combined_results = exact_results + reranked_results + unranked_results
 
         # Remove text from results to reduce payload size
         for result in combined_results:
