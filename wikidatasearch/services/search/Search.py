@@ -59,7 +59,7 @@ class Search(ABC):
                 "all_ranks": False,
                 "qualifiers": True,
                 "fallback_lang": "any",
-                "format": format
+                "format": format,
             }
             headers = {"User-Agent": "Wikidata Vector Database (embedding@wikimedia.de)"}
 
@@ -70,8 +70,6 @@ class Search(ABC):
 
         # Limit the length of the text
         text = {
-            id: value.strip()[:max_length]
-            for id, value in text.items()
-            if isinstance(value, str) and value.strip()
+            id: value.strip()[:max_length] for id, value in text.items() if isinstance(value, str) and value.strip()
         }
         return text
