@@ -282,43 +282,44 @@ export function renderSearch(root, { navigate }) {
   const apiExampleFor = (language, searchOptions) => {
     const { endpoint, params } = apiRequest(searchOptions)
     const entries = Object.entries(params)
+    const defaultUserAgent = 'ProjectName/1.0 (email@example.com)'
     const url = new URL(endpoint)
     url.search = new URLSearchParams(params).toString()
     const requestUrl = url.href
 
     if (language === 'python') {
       const lines = entries.map(([key, value]) => `    ${JSON.stringify(key)}: ${JSON.stringify(value)},`).join('\n')
-      return `import requests\n\nparams = {\n${lines}\n}\nresponse = requests.get(${JSON.stringify(endpoint)}, params=params)\nresponse.raise_for_status()\nprint(response.json())`
+      return `import requests\n\n# Required: change this User-Agent before making requests.\nheaders = {\n    "User-Agent": ${JSON.stringify(defaultUserAgent)},\n}\nparams = {\n${lines}\n}\nresponse = requests.get(${JSON.stringify(endpoint)}, params=params, headers=headers)\nresponse.raise_for_status()\nprint(response.json())`
     }
 
     if (language === 'javascript') {
       const lines = entries.map(([key, value]) => `  ${JSON.stringify(key)}: ${JSON.stringify(value)},`).join('\n')
-      return `const params = new URLSearchParams({\n${lines}\n})\nconst response = await fetch(\`${endpoint}?\${params}\`)\nif (!response.ok) throw new Error(\`Request failed: \${response.status}\`)\nconst data = await response.json()\nconsole.log(data)`
+      return `// Required: change this User-Agent before making requests.\nconst headers = {\n  "User-Agent": ${JSON.stringify(defaultUserAgent)},\n}\nconst params = new URLSearchParams({\n${lines}\n})\nconst response = await fetch(\`${endpoint}?\${params}\`, { headers })\nif (!response.ok) throw new Error(\`Request failed: \${response.status}\`)\nconst data = await response.json()\nconsole.log(data)`
     }
 
     if (language === 'php') {
       const phpString = (value) => `'${String(value).replaceAll('\\', '\\\\').replaceAll("'", "\\'")}'`
       const lines = entries.map(([key, value]) => `    ${phpString(key)} => ${phpString(value)},`).join('\n')
-      return `<?php\n$params = [\n${lines}\n];\n$url = ${phpString(endpoint)} . '?' . http_build_query($params);\n$response = file_get_contents($url);\nif ($response === false) {\n    throw new RuntimeException('API request failed');\n}\nprint_r(json_decode($response, true));`
+      return `<?php\n// Required: change this User-Agent before making requests.\n$options = [\n    'http' => [\n        'header' => ${phpString(`User-Agent: ${defaultUserAgent}`)},\n    ],\n];\n$context = stream_context_create($options);\n$params = [\n${lines}\n];\n$url = ${phpString(endpoint)} . '?' . http_build_query($params);\n$response = file_get_contents($url, false, $context);\nif ($response === false) {\n    throw new RuntimeException('API request failed');\n}\nprint_r(json_decode($response, true));`
     }
 
     if (language === 'go') {
-      return `package main\n\nimport (\n    "fmt"\n    "io"\n    "net/http"\n)\n\nfunc main() {\n    response, err := http.Get(${JSON.stringify(requestUrl)})\n    if err != nil {\n        panic(err)\n    }\n    defer response.Body.Close()\n\n    body, err := io.ReadAll(response.Body)\n    if err != nil {\n        panic(err)\n    }\n    if response.StatusCode >= 400 {\n        panic(response.Status)\n    }\n    fmt.Println(string(body))\n}`
+      return `package main\n\nimport (\n    "fmt"\n    "io"\n    "net/http"\n)\n\nfunc main() {\n    request, err := http.NewRequest(http.MethodGet, ${JSON.stringify(requestUrl)}, nil)\n    if err != nil {\n        panic(err)\n    }\n    // Required: change this User-Agent before making requests.\n    request.Header.Set("User-Agent", ${JSON.stringify(defaultUserAgent)})\n\n    response, err := http.DefaultClient.Do(request)\n    if err != nil {\n        panic(err)\n    }\n    defer response.Body.Close()\n\n    body, err := io.ReadAll(response.Body)\n    if err != nil {\n        panic(err)\n    }\n    if response.StatusCode >= 400 {\n        panic(response.Status)\n    }\n    fmt.Println(string(body))\n}`
     }
 
     if (language === 'java') {
-      return `import java.net.URI;\nimport java.net.http.HttpClient;\nimport java.net.http.HttpRequest;\nimport java.net.http.HttpResponse;\n\npublic class Example {\n    public static void main(String[] args) throws Exception {\n        var client = HttpClient.newHttpClient();\n        var request = HttpRequest.newBuilder()\n            .uri(URI.create(${JSON.stringify(requestUrl)}))\n            .GET()\n            .build();\n        var response = client.send(request, HttpResponse.BodyHandlers.ofString());\n        if (response.statusCode() >= 400) {\n            throw new RuntimeException("Request failed: " + response.statusCode());\n        }\n        System.out.println(response.body());\n    }\n}`
+      return `import java.net.URI;\nimport java.net.http.HttpClient;\nimport java.net.http.HttpRequest;\nimport java.net.http.HttpResponse;\n\npublic class Example {\n    public static void main(String[] args) throws Exception {\n        var client = HttpClient.newHttpClient();\n        // Required: change this User-Agent before making requests.\n        var request = HttpRequest.newBuilder()\n            .uri(URI.create(${JSON.stringify(requestUrl)}))\n            .header("User-Agent", ${JSON.stringify(defaultUserAgent)})\n            .GET()\n            .build();\n        var response = client.send(request, HttpResponse.BodyHandlers.ofString());\n        if (response.statusCode() >= 400) {\n            throw new RuntimeException("Request failed: " + response.statusCode());\n        }\n        System.out.println(response.body());\n    }\n}`
     }
 
     if (language === 'csharp') {
-      return `using System.Net.Http;\n\nusing var client = new HttpClient();\nvar response = await client.GetAsync(${JSON.stringify(requestUrl)});\nresponse.EnsureSuccessStatusCode();\nvar data = await response.Content.ReadAsStringAsync();\nConsole.WriteLine(data);`
+      return `using System.Net.Http;\n\nusing var client = new HttpClient();\n// Required: change this User-Agent before making requests.\nclient.DefaultRequestHeaders.UserAgent.ParseAdd(${JSON.stringify(defaultUserAgent)});\nvar response = await client.GetAsync(${JSON.stringify(requestUrl)});\nresponse.EnsureSuccessStatusCode();\nvar data = await response.Content.ReadAsStringAsync();\nConsole.WriteLine(data);`
     }
 
     if (language === 'ruby') {
-      return `require "json"\nrequire "net/http"\n\nuri = URI(${JSON.stringify(requestUrl)})\nresponse = Net::HTTP.get_response(uri)\nraise "Request failed: #{response.code}" unless response.is_a?(Net::HTTPSuccess)\nputs JSON.pretty_generate(JSON.parse(response.body))`
+      return `require "json"\nrequire "net/http"\n\nuri = URI(${JSON.stringify(requestUrl)})\nrequest = Net::HTTP::Get.new(uri)\n# Required: change this User-Agent before making requests.\nrequest["User-Agent"] = ${JSON.stringify(defaultUserAgent)}\nresponse = Net::HTTP.start(uri.hostname, uri.port, use_ssl: uri.scheme == "https") do |http|\n  http.request(request)\nend\nraise "Request failed: #{response.code}" unless response.is_a?(Net::HTTPSuccess)\nputs JSON.pretty_generate(JSON.parse(response.body))`
     }
 
-    return `curl ${JSON.stringify(requestUrl)}`
+    return `# Required: change this User-Agent before making requests.\ncurl -H ${JSON.stringify(`User-Agent: ${defaultUserAgent}`)} ${JSON.stringify(requestUrl)}`
   }
 
   const renderApiExample = () => {
