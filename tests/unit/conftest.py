@@ -55,7 +55,6 @@ class DummySearch:
                 {
                     "PID": "P31",
                     "similarity_score": 0.91,
-                    "rrf_score": 0.04,
                     "source": "Vector Search",
                 }
             ]
@@ -63,7 +62,6 @@ class DummySearch:
             {
                 "QID": "Q42",
                 "similarity_score": 0.95,
-                "rrf_score": 0.05,
                 "source": "Vector Search",
             }
         ]

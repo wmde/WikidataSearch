@@ -137,7 +137,7 @@ class HybridSearch(Search):
             return_vectors (bool): Whether to return the vector embeddings of the entity. Defaults to False.
 
         Returns:
-            list: A list of fused search results for items and/or properties.
+            list: Search results sorted by similarity or, when requested, reranker score.
         """
         query_filter = dict(filter or {})
         is_id = re.fullmatch(r"[PQ]\d+", query)
@@ -178,9 +178,8 @@ class HybridSearch(Search):
             or lang == "all"
             or (scope == "all" and vdb in self.vectorsearch["no_sitelinks"].values())
         ]
-        num_shards = len(selected_vectorsearches)
-        num_shards = max(num_shards, 1)
-        vs_K = max(10, min(vs_K, (vs_K * 2 + 1) // num_shards))
+        num_shards = max(len(selected_vectorsearches), 1)
+        per_shard_k = max(10, min(vs_K, (vs_K * 2 + 1) // num_shards))
 
         with ThreadPoolExecutor(max_workers=4) as ex:
             vfunc = []
@@ -192,7 +191,7 @@ class HybridSearch(Search):
                     vector_filter.copy(),
                     embedding,
                     vdblang,
-                    vs_K,
+                    per_shard_k,
                     return_vectors,
                 )
                 vfunc.append((vdb, func))
@@ -227,13 +226,12 @@ class HybridSearch(Search):
             reverse=True,
         )
 
-        # Fuse the merged vector ranking with the keyword ranking.
+        # Merge both retrieval paths and rank their candidates by similarity.
         combined_results = [
             (VectorSearch.name, merged_vector_results),
             (self.keywordsearch.name, keyword_results),
         ]
-        results = self.reciprocal_rank_fusion(combined_results)
-        results = results[:vs_K]
+        results = self.merge_results_by_similarity(combined_results)[:vs_K]
 
         if rerank:
             # Rerank the results with the current Wikidata values.
@@ -246,7 +244,7 @@ class HybridSearch(Search):
 
         Args:
             query: Natural-language query or Wikidata entity ID.
-            results: Fused item or property search candidates.
+            results: Similarity-ranked item or property search candidates.
             lang: Preferred language for textification.
 
         Returns:
@@ -478,41 +476,38 @@ class HybridSearch(Search):
         return results
 
     @staticmethod
-    def reciprocal_rank_fusion(results: list, k: int = 50) -> list:
-        """Combine result lists with Reciprocal Rank Fusion (RRF).
+    def merge_results_by_similarity(results: list[tuple[str, list[dict]]]) -> list[dict]:
+        """Merge result lists, keeping each entity's highest similarity score.
 
         Args:
-            results (list): Sequence of `(source_name, source_results)` tuples.
-            k (int): Smoothing factor for rank contribution.
+            results: Sequence of ``(source_name, source_results)`` tuples.
 
         Returns:
-            list[dict]: Fused results including QID/PID, similarity score, source, and `rrf_score`.
+            Deduplicated results sorted by descending similarity score. The source field
+            records every retrieval path in which an entity appeared.
         """
-        scores = {}
+        best_by_id = {}
+        sources_by_id = {}
 
         for source_name, source_results in results:
-            for rank, item in enumerate(source_results):
-                ID = item.get("QID", item.get("PID"))
+            for item in source_results:
+                entity_id = item.get("QID") or item.get("PID")
+                if not entity_id:
+                    continue
 
-                similarity_score = item.get("similarity_score", 0.0)
-                rrf_score = 1.0 / (k + rank + 1)
+                sources = sources_by_id.setdefault(entity_id, [])
+                if source_name not in sources:
+                    sources.append(source_name)
 
-                if similarity_score > 0.0:
-                    if ID not in scores:
-                        scores[ID] = {
-                            **item,
-                            "rrf_score": rrf_score,
-                            "source": source_name,
-                        }
+                previous = best_by_id.get(entity_id)
+                if previous is None or item.get("similarity_score", 0.0) > previous.get("similarity_score", 0.0):
+                    best_by_id[entity_id] = dict(item)
 
-                    else:
-                        scores[ID]["similarity_score"] = max(similarity_score, scores[ID].get("similarity_score", 0.0))
-                        scores[ID]["rrf_score"] += rrf_score
+        for entity_id, item in best_by_id.items():
+            item["source"] = ", ".join(sources_by_id[entity_id])
 
-                        if source_name not in scores[ID]["source"]:
-                            scores[ID]["source"] += f", {source_name}"
-
-        fused_results = sorted(
-            scores.values(), key=lambda x: (x["rrf_score"], x.get("similarity_score", 0.0)), reverse=True
+        return sorted(
+            best_by_id.values(),
+            key=lambda item: item.get("similarity_score", 0.0),
+            reverse=True,
         )
-        return fused_results
