@@ -60,7 +60,7 @@ export function renderHome(root, { navigate }) {
               <h1>How vector search works</h1>
               <p>Vector search uses language models to measure semantic similarity between a natural-language query and Wikidata entities. Unlike SPARQL, which is designed for precise and structured retrieval, vector search supports exploration and discovery.</p>
               <div class="score-legend" aria-label="Score definitions">
-                <span class="score-legend__item"><span class="score-legend__dot score-legend__dot--excellent" aria-hidden="true"></span>≥ 90% Excellent</span>
+                <span class="score-legend__item"><span class="score-legend__dot score-legend__dot--excellent" aria-hidden="true"></span>≥ 80% Excellent</span>
                 <span class="score-legend__item"><span class="score-legend__dot score-legend__dot--good" aria-hidden="true"></span>≥ 70% Good</span>
                 <span class="score-legend__item"><span class="score-legend__dot score-legend__dot--acceptable" aria-hidden="true"></span>&lt; 70% Acceptable</span>
               </div>

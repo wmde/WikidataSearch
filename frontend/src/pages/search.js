@@ -8,10 +8,12 @@ function formatSimilarity(value) {
   return Math.max(0, Math.min(100, percent))
 }
 
-function scoreClass(score) {
+function scoreClass(score, useReranker) {
   if (score === null) return 'score--unavailable'
-  if (score >= 90) return 'score--high'
-  if (score >= 70) return 'score--medium'
+  const highThreshold = useReranker ? 75 : 80
+  const mediumThreshold = useReranker ? 50 : 70
+  if (score >= highThreshold) return 'score--high'
+  if (score >= mediumThreshold) return 'score--medium'
   return 'score--low'
 }
 
@@ -26,7 +28,7 @@ function resultCard(result, index, useReranker, relatedType) {
     <article class="result-card" data-result-index="${index}">
       <div class="result-card__heading">
         <h3><a href="${wikidataUrl(result.id)}" target="_blank" rel="noreferrer">${escapeHtml(result.label)}</a> <span>(${escapeHtml(result.id)})</span></h3>
-        <span class="score ${scoreClass(score)}">${scoreName}: ${scoreLabel}</span>
+        <span class="score ${scoreClass(score, useReranker)}">${scoreName}: ${scoreLabel}</span>
       </div>
       <p class="result-card__description">${escapeHtml(result.description)}</p>
       <div class="result-card__relations">
@@ -360,7 +362,7 @@ export function renderSearch(root, { navigate }) {
 
   const loadRelatedResults = async (searchOptions, primaryResults, controller) => {
     const relatedType = searchOptions.type === 'item' ? 'property' : 'item'
-    const relatedOptions = { ...searchOptions, type: relatedType }
+    const relatedOptions = { ...searchOptions, type: relatedType, rerank: false }
 
     try {
       const relatedRawResults = await searchEntities(relatedOptions, controller.signal)
