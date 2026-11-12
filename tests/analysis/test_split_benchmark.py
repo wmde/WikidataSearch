@@ -96,19 +96,18 @@ def _load_api_keys() -> dict[str, str]:
     return merged
 
 
-def _import_search_classes():
-    """Import search classes or skip when dependencies are missing."""
+def _import_vector_search_class():
+    """Import the vector search class or skip when dependencies are missing."""
     root = Path(__file__).resolve().parents[2]
     if str(root) not in sys.path:
         sys.path.insert(0, str(root))
 
     try:
-        from wikidatasearch.services.search.HybridSearch import HybridSearch
         from wikidatasearch.services.search.VectorSearch import VectorSearch
     except ModuleNotFoundError as exc:
         pytest.skip(f"Missing Python module '{exc.name}'. Install dependencies before running benchmark tests.")
 
-    return HybridSearch, VectorSearch
+    return VectorSearch
 
 
 def _run_with_retry(func, *args, retries=3, backoff_s=0.5, measure_time=True, **kwargs):
@@ -281,19 +280,10 @@ def _lang_stats_raw(results):
     return stats
 
 
-def _lang_stats_rrf(results):
-    """Estimate language exposure ratios from merged results with RRF."""
-    rows = sorted(results, key=lambda x: x["similarity_score"], reverse=True)[:TOP_N_EXPOSURE]
-    if not rows:
-        return {lang: 0.0 for lang in LANGS}
-    denom = float(len(rows))
-    return {lang: sum(1 for row in rows if lang in row.get("source", "")) / denom for lang in LANGS}
-
-
 @pytest.fixture(scope="module")
 def split_benchmark_payload():
     """Build benchmark payloads for runtime, quality, and recall assertions."""
-    HybridSearch, VectorSearch = _import_search_classes()
+    VectorSearch = _import_vector_search_class()
     api_keys = _load_api_keys()
 
     all_query_rows = [{"query_lang": lang, "query": query} for lang in LANGS for query in QUERIES_BY_LANG[lang]]
@@ -349,30 +339,6 @@ def split_benchmark_payload():
     v1_lang_stats_raw = [_lang_stats_raw(results) for results in v1_results]
     v2_lang_stats_raw_avg = _average_dicts(v2_lang_stats_raw, keys=LANGS)
     v1_lang_stats_raw_avg = _average_dicts(v1_lang_stats_raw, keys=LANGS)
-
-    v2_rrf_inputs = [
-        [(LANGS[i], _normalize_results(VectorSearch, per_query[LANGS[i]], K=BASE_K)) for i in range(len(LANGS))]
-        for per_query in v2_results
-    ]
-    v2_rrf_results = [HybridSearch.reciprocal_rank_fusion(inputs) for inputs in v2_rrf_inputs]
-    v2_lang_stats_rrf_avg = _average_dicts([_lang_stats_rrf(results) for results in v2_rrf_results], keys=LANGS)
-
-    v1_rrf_inputs = [
-        [
-            (
-                lang,
-                _normalize_results(
-                    VectorSearch,
-                    [row for row in per_query if row.get("metadata", {}).get("Language") == lang],
-                    K=BASE_K,
-                ),
-            )
-            for lang in LANGS
-        ]
-        for per_query in v1_results
-    ]
-    v1_rrf_results = [HybridSearch.reciprocal_rank_fusion(inputs) for inputs in v1_rrf_inputs]
-    v1_lang_stats_rrf_avg = _average_dicts([_lang_stats_rrf(results) for results in v1_rrf_results], keys=LANGS)
 
     recall_rows = []
     for lang in LANGS:
@@ -445,8 +411,6 @@ def split_benchmark_payload():
         "accuracies_v2": accuracies_v2,
         "v1_lang_stats_raw_avg": v1_lang_stats_raw_avg,
         "v2_lang_stats_raw_avg": v2_lang_stats_raw_avg,
-        "v1_lang_stats_rrf_avg": v1_lang_stats_rrf_avg,
-        "v2_lang_stats_rrf_avg": v2_lang_stats_rrf_avg,
         "recall_rows": recall_rows,
     }
 
@@ -473,8 +437,6 @@ def test_split_benchmark_exposure_metrics(split_benchmark_payload):
     for key in [
         "v1_lang_stats_raw_avg",
         "v2_lang_stats_raw_avg",
-        "v1_lang_stats_rrf_avg",
-        "v2_lang_stats_rrf_avg",
     ]:
         stats = payload[key]
         assert set(stats.keys()) == set(LANGS)

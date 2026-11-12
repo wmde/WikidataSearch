@@ -13,7 +13,7 @@ This folder contains backend tests split into three layers:
 - Route validation behavior for `item`, `property`, and `similarity` handlers.
 - Search-call argument wiring (filters, lowercased language, `ks_K` behavior).
 - Error-path checks (`422` cases like invalid `instanceof`, too many IDs, disabled vectors).
-- Helper logic in search services (RRF merge behavior, dedup behavior, keyword cleaning).
+- Helper logic in search services (similarity merging, dedup behavior, keyword cleaning).
 
 ### Integration (`tests/integration`)
 
@@ -26,7 +26,7 @@ This folder contains backend tests split into three layers:
 
 - V1 vs V2 runtime sampling across multilingual query sets.
 - Top-N similarity proxy comparisons.
-- Language exposure metrics (raw similarity + RRF-based exposure).
+- Language exposure metrics for raw similarity results.
 - Expanded-`K` recall checks (whether larger `K` recovers V1-only IDs).
 
 ## Setup

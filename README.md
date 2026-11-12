@@ -34,7 +34,7 @@ Current operational constraints:
 
 ### `GET /item/query/`
 
-Semantic + keyword search for Wikidata items (QIDs), fused with Reciprocal Rank Fusion (RRF).
+Semantic + keyword search for Wikidata items (QIDs), ranked by vector similarity.
 
 Parameters:
 
@@ -61,7 +61,7 @@ curl -sG 'https://wd-vectordb.wmcloud.org/item/query/' \
 
 ### `GET /property/query/`
 
-Semantic + keyword search for Wikidata properties (PIDs), fused with RRF.
+Semantic + keyword search for Wikidata properties (PIDs), ranked by vector similarity.
 
 Parameters:
 
@@ -109,7 +109,6 @@ curl -sG 'https://wd-vectordb.wmcloud.org/similarity-score/' \
 
 - `QID`
 - `similarity_score`
-- `rrf_score`
 - `source` (`Vector Search`, `Keyword Search`, or both)
 - `reranker_score` (when `rerank=true`)
 - `vector` (when `return_vectors=true`)
@@ -130,8 +129,8 @@ High-level request flow:
 2. `HybridSearch` orchestrates retrieval:
    - Vector path: embeds query with Jina embeddings and searches Astra DB vector collections across language shards in parallel.
    - Keyword path: runs Wikidata keyword search against `wikidata.org`.
-3. Vector results are merged by maximum similarity, then fused with keyword results using RRF.
-4. Optional reranking fetches Wikidata text representations and reorders top hits with Jina reranker.
+3. Vector and keyword candidates are deduplicated, retain their maximum similarity, and are sorted by similarity.
+4. Optional reranking fetches Wikidata text representations and replaces the similarity order with Jina reranker order.
 5. JSON response is returned and request metadata is logged for analytics.
 
 Main components in this repo:
