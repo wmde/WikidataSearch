@@ -9,8 +9,9 @@ function formatSimilarity(value) {
 }
 
 function scoreClass(score) {
-  if (score >= 85) return 'score--high'
-  if (score >= 65) return 'score--medium'
+  if (score === null) return 'score--unavailable'
+  if (score >= 90) return 'score--high'
+  if (score >= 70) return 'score--medium'
   return 'score--low'
 }
 
@@ -19,13 +20,13 @@ function resultCard(result, index, useReranker, relatedType) {
   const scoreLabel = score === null ? 'Not available' : `${score.toFixed(score % 1 ? 1 : 0)}%`
   const scoreName = useReranker ? 'Reranker' : 'Similarity'
   const relatedTitle = relatedType === 'property' ? 'Search-matched properties' : 'Search-matched items'
-  const loadingLabel = relatedType === 'property' ? 'Finding relevant properties…' : 'Finding relevant items…'
+  const loadingLabel = relatedType === 'property' ? 'Finding matching properties…' : 'Finding matching items…'
 
   return `
     <article class="result-card" data-result-index="${index}">
       <div class="result-card__heading">
         <h3><a href="${wikidataUrl(result.id)}" target="_blank" rel="noreferrer">${escapeHtml(result.label)}</a> <span>(${escapeHtml(result.id)})</span></h3>
-        <span class="score ${scoreClass(score || 0)}">${scoreName}: ${scoreLabel}</span>
+        <span class="score ${scoreClass(score)}">${scoreName}: ${scoreLabel}</span>
       </div>
       <p class="result-card__description">${escapeHtml(result.description)}</p>
       <div class="result-card__relations">
@@ -175,16 +176,16 @@ export function renderSearch(root, { navigate }) {
 
             <aside class="result-actions" aria-label="Use these results" hidden>
               <h2>Use these results for:</h2>
-              <button type="button" data-action="copy">${icon('copy')} Copy Link</button>
-              <button type="button" data-action="export">${icon('document')} Export Data</button>
-              <button type="button" data-action="api" aria-expanded="false">${icon('code')} API Example</button>
+              <button type="button" data-action="copy">${icon('copy')} Copy link</button>
+              <button type="button" data-action="export">${icon('document')} Export data</button>
+              <button type="button" data-action="api" aria-expanded="false">${icon('code')} API example</button>
               <p class="result-actions__status" data-action-status>Search results can be used as grounding context for LLMs or integrated through the API.</p>
               <div class="api-example-panel" data-api-example-panel hidden>
                 <div class="api-example-toolbar">
                   <select id="api-example-language" aria-label="API example language" data-api-language>
                     <option value="python">Python</option>
                     <option value="bash">Bash</option>
-                    <option value="javascript">JavaScript</option>
+                    <option value="javascript">Node.js</option>
                     <option value="php">PHP</option>
                     <option value="go">Go</option>
                     <option value="java">Java</option>
@@ -384,7 +385,7 @@ export function renderSearch(root, { navigate }) {
       if (error.name === 'AbortError' || destroyed || activeController !== controller) return
       const label = relatedType === 'property' ? 'properties' : 'items'
       list.querySelectorAll('[data-related-results]').forEach((container) => {
-        container.innerHTML = `<span class="related-error">Relevant ${label} could not be loaded.</span>`
+        container.innerHTML = `<span class="related-error">Matching ${label} could not be loaded.</span>`
       })
     }
   }
@@ -410,7 +411,7 @@ export function renderSearch(root, { navigate }) {
       results = await enrichEntities(rawResults, searchOptions.language, controller.signal)
       if (destroyed || activeController !== controller) return
       resultOptions = searchOptions
-      heading.innerHTML = `<h1>Results for “${escapeHtml(currentQuery)}”</h1><p>${results.length} ${results.length === 1 ? 'entry' : 'entries'}</p>`
+      heading.innerHTML = `<h1>Results for “${escapeHtml(currentQuery)}”</h1><p>${results.length} ${results.length === 1 ? 'result' : 'results'}</p>`
       const relatedType = searchOptions.type === 'item' ? 'property' : 'item'
       list.innerHTML = results.length
         ? results.map((result, index) => resultCard(result, index, searchOptions.rerank, relatedType)).join('')

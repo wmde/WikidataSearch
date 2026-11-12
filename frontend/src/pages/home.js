@@ -42,7 +42,7 @@ const featuredUseCases = [
   {
     icon: 'layers',
     title: 'Explore semantic relationships',
-    description: 'Find conceptually similar entities, even when Wikidata does not explicitly connect them.',
+    description: 'Find conceptually similar entities, even when Wikidata doesn\'t explicitly connect them.',
     capability: 'Similarity exploration',
   },
 ]
@@ -57,8 +57,13 @@ export function renderHome(root, { navigate }) {
           <aside class="info-panel" data-info-panel>
             <span class="info-panel__icon">${icon('search')}</span>
             <div>
-              <h1>How Vector Search Works</h1>
+              <h1>How vector search works</h1>
               <p>Vector search uses language models to measure semantic similarity between a natural-language query and Wikidata entities. Unlike SPARQL, which is designed for precise and structured retrieval, vector search supports exploration and discovery.</p>
+              <div class="score-legend" aria-label="Score definitions">
+                <span class="score-legend__item"><span class="score-legend__dot score-legend__dot--excellent" aria-hidden="true"></span>≥ 90% Excellent</span>
+                <span class="score-legend__item"><span class="score-legend__dot score-legend__dot--good" aria-hidden="true"></span>≥ 70% Good</span>
+                <span class="score-legend__item"><span class="score-legend__dot score-legend__dot--acceptable" aria-hidden="true"></span>&lt; 70% Acceptable</span>
+              </div>
             </div>
             <button class="icon-button info-panel__close" type="button" aria-label="Dismiss explanation" data-dismiss-info>×</button>
           </aside>
@@ -73,7 +78,7 @@ export function renderHome(root, { navigate }) {
                   <span class="example-row__label">${example.label}</span>
                   <button class="example-query" type="button" data-query="${escapeHtml(example.query)}">“${escapeHtml(example.query)}”</button>
                   <span class="example-row__check">${icon('check')}</span>
-                  <span class="example-row__expected">Expected: ${example.expected}</span>
+                  <span class="example-row__expected">${example.expected}</span>
                 </div>`).join('')}
             </div>
           </div>
@@ -83,7 +88,7 @@ export function renderHome(root, { navigate }) {
       <section class="section section--white">
         <div class="container">
           <div class="section-heading">
-            <h2>Core Capabilities</h2>
+            <h2>Core capabilities</h2>
             <p class="section-heading__kicker">Retrieve, rank, and explore</p>
             <p>Use semantic similarity and context to find likely Wikidata entities, identify the intended match, and surface relationships beyond explicit graph connections.</p>
           </div>
@@ -102,7 +107,7 @@ export function renderHome(root, { navigate }) {
 
           <div class="section-action">
             <a class="button button--primary button--rounded" href="/use-cases" data-route>
-              See Practical Use Cases ${icon('arrow')}
+              See practical use cases ${icon('arrow')}
             </a>
           </div>
         </div>
@@ -111,28 +116,28 @@ export function renderHome(root, { navigate }) {
       <section class="section section--soft" id="resources">
         <div class="container">
           <div class="section-heading">
-            <h2>Developer Resources</h2>
+            <h2>Developer resources</h2>
             <p>Everything you need to integrate and build with the Wikidata Vector Database. Access API documentation, project information, and the full vector dataset.</p>
           </div>
 
           <div class="card-grid card-grid--three resource-grid">
             <article class="resource-card">
               <span class="round-icon">${icon('document')}</span>
-              <h3>API Documentation</h3>
+              <h3>API documentation</h3>
               <p>Complete API reference, endpoints, parameters, and response models</p>
-              <a class="button button--primary" href="/docs">Read Docs</a>
+              <a class="button button--primary" href="/docs">Read docs</a>
             </article>
             <article class="resource-card">
               <span class="round-icon">${icon('code')}</span>
-              <h3>Project Page</h3>
+              <h3>Project page</h3>
               <p>Learn about the project, architecture, and community contributions</p>
-              <a class="button button--primary" href="https://www.wikidata.org/wiki/Wikidata:Vector_Database" target="_blank" rel="noreferrer">View Project</a>
+              <a class="button button--primary" href="https://www.wikidata.org/wiki/Wikidata:Vector_Database" target="_blank" rel="noreferrer">View project</a>
             </article>
             <article class="resource-card">
               <span class="round-icon">${icon('download')}</span>
-              <h3>Download Dataset</h3>
+              <h3>Download dataset</h3>
               <p>Get the full Wikidata entity embedding dataset for local analysis and custom applications</p>
-              <a class="button button--primary" href="https://huggingface.co/datasets/philippesaade/Wikidata_Vectors_0.2" target="_blank" rel="noreferrer">View Dataset</a>
+              <a class="button button--primary" href="https://huggingface.co/datasets/philippesaade/Wikidata_Vectors_0.2" target="_blank" rel="noreferrer">View dataset</a>
             </article>
           </div>
           <p class="section-link"><a href="https://github.com/wmde/WikidataSearch" target="_blank" rel="noreferrer">View on GitHub →</a></p>
@@ -142,7 +147,7 @@ export function renderHome(root, { navigate }) {
       <section class="section section--white newsletter">
         <div class="container newsletter__inner">
           <span class="round-icon round-icon--primary">${icon('send')}</span>
-          <h2>Stay Updated with Our Newsletter</h2>
+          <h2>Stay updated with our newsletter</h2>
           <p>Get the latest updates about new features, improvements, community projects, and technical insights delivered to your inbox.</p>
           <form
             class="newsletter__form"
@@ -185,7 +190,7 @@ export function renderHome(root, { navigate }) {
             <input type="hidden" name="scriptless" value="yes" />
             <input type="hidden" name="zc_spmSubmit" value="ZCSPMSUBMIT" />
           </form>
-          <p class="newsletter__consent">By subscribing, I agree that Wikimedia may contact me by email based on my consent (Art. 6 para. 1 lit. a GDPR) until revoked. I can revoke my consent at any time with effect for the future.</p>
+          <p class="newsletter__consent">By subscribing, I consent to Wikimedia contacting me by email (Art. 6 para. 1 lit. a GDPR). I may withdraw my consent at any time with immediate effect.</p>
         </div>
       </section>
     </main>
