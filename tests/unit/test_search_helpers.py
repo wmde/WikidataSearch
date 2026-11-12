@@ -1,6 +1,6 @@
 """Unit tests for search helpers.
 
-Covers reciprocal rank fusion, deduplication, query cleaning, search routing, and embedding lookup by ID.
+Covers similarity merging, deduplication, query cleaning, search routing, and embedding lookup by ID.
 """
 
 import importlib
@@ -57,8 +57,8 @@ def _service_classes():
     return hybrid_module.HybridSearch, keyword_module.KeywordSearch, vector_module.VectorSearch
 
 
-def test_reciprocal_rank_fusion_merges_sources_and_accumulates_rrf(test_ctx):
-    """Validate reciprocal rank fusion sources and accumulates rrf score."""
+def test_merge_results_by_similarity_keeps_best_score_and_combines_sources(test_ctx):
+    """Validate hybrid results keep their best score and record every retrieval source."""
     HybridSearch, _, _ = _service_classes()
     vector_results = [
         {"QID": "Q42", "similarity_score": 0.95},
@@ -69,21 +69,20 @@ def test_reciprocal_rank_fusion_merges_sources_and_accumulates_rrf(test_ctx):
         {"QID": "Q42", "similarity_score": 0.70},
     ]
 
-    fused = HybridSearch.reciprocal_rank_fusion(
+    merged = HybridSearch.merge_results_by_similarity(
         [
             ("Vector Search", vector_results),
             ("Keyword Search", keyword_results),
         ]
     )
 
-    by_id = {row["QID"]: row for row in fused}
+    by_id = {row["QID"]: row for row in merged}
+    assert [row["QID"] for row in merged] == ["Q42", "Q5"]
     assert set(by_id.keys()) == {"Q42", "Q5"}
     assert by_id["Q42"]["source"] == "Vector Search, Keyword Search"
     assert by_id["Q5"]["source"] == "Vector Search, Keyword Search"
     assert by_id["Q42"]["similarity_score"] == 0.95
     assert by_id["Q5"]["similarity_score"] == 0.90
-    assert by_id["Q42"]["rrf_score"] > 0
-    assert by_id["Q5"]["rrf_score"] > 0
 
 
 def test_vector_remove_duplicates_prefers_best_similarity_and_keeps_unique_results(test_ctx):
@@ -110,10 +109,10 @@ def test_vector_remove_duplicates_prefers_best_similarity_and_keeps_unique_resul
     assert deduped[1]["similarity_score"] == 0.70
 
 
-def test_reciprocal_rank_fusion_drops_non_positive_similarity(test_ctx):
-    """Validate reciprocal rank fusion that drops negative similarity scores."""
+def test_merge_results_by_similarity_sorts_all_scores_descending(test_ctx):
+    """Validate similarity merging orders positive, zero, and negative scores."""
     HybridSearch, _, _ = _service_classes()
-    fused = HybridSearch.reciprocal_rank_fusion(
+    merged = HybridSearch.merge_results_by_similarity(
         [
             (
                 "Vector Search",
@@ -126,7 +125,46 @@ def test_reciprocal_rank_fusion_drops_non_positive_similarity(test_ctx):
         ]
     )
 
-    assert [row["QID"] for row in fused] == ["Q3"]
+    assert [row["QID"] for row in merged] == ["Q3", "Q1", "Q2"]
+
+
+def test_hybrid_search_uses_per_shard_limit_but_returns_requested_count(test_ctx):
+    """Validate the per-shard candidate limit does not truncate the final result count."""
+    HybridSearch, _, _ = _service_classes()
+    hybrid = HybridSearch.__new__(HybridSearch)
+    shard_limits = []
+
+    hybrid.embedding_model = types.SimpleNamespace(embed_query=lambda _query: [0.1])
+    hybrid.translator = types.SimpleNamespace(translate=lambda query, src_lang: query)
+    hybrid.keywordsearch = types.SimpleNamespace(name="Keyword Search")
+    hybrid.vectorsearch = {
+        "items": {lang: types.SimpleNamespace(name="Vector Search", lang=lang) for lang in ("en", "fr", "de", "ar")},
+        "properties": {},
+        "no_sitelinks": {},
+    }
+
+    def _search_shard(vectorsearch, query, query_filter, embedding, lang, K, return_vectors):
+        shard_limits.append(K)
+        lang_offset = {"en": 0, "fr": 100, "de": 200, "ar": 300}[lang]
+        return [
+            {
+                "QID": f"Q{lang_offset + index + 1}",
+                "similarity_score": 1.0 - (lang_offset + index) / 1000,
+            }
+            for index in range(K)
+        ]
+
+    hybrid._search_vector_shard = _search_shard
+    hybrid.keyword_search = lambda *args, **kwargs: []
+
+    results = hybrid.search("hello", filter={"metadata.IsItem": True}, lang="all", vs_K=50)
+
+    assert len(results) == 50
+    assert shard_limits == [25, 25, 25, 25]
+    assert [row["similarity_score"] for row in results] == sorted(
+        (row["similarity_score"] for row in results),
+        reverse=True,
+    )
 
 
 def test_rerank_textifies_id_query_and_pins_exact_match(test_ctx):

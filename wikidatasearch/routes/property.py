@@ -18,7 +18,6 @@ class PropertyQuery(BaseModel):
 
     PID: str = Field(..., description="Wikidata property PID")
     similarity_score: float = Field(..., description="Dot product similarity")
-    rrf_score: Optional[float] = Field(0.0, description="Reciprocal Rank Fusion score")
     source: Optional[str] = Field("", description="Source of the search")
     vector: Optional[list[float]] = Field(None, description="Present when return_vectors is True")
     reranker_score: Optional[float] = Field(None, description="Present when rerank is True")
@@ -30,14 +29,13 @@ router = APIRouter(
     dependencies=[Depends(require_descriptive_user_agent)],
     responses={
         200: {
-            "description": "List of relevant Wikidata properties sorted by fused similarity scores",
+            "description": "List of relevant Wikidata properties sorted by similarity or reranker score",
             "content": {
                 "application/json": {
                     "example": [
                         {
                             "PID": "P31",
                             "similarity_score": 0.89,
-                            "rrf_score": 0.037,
                             "source": "Vector Search",
                         }
                     ]
@@ -52,8 +50,8 @@ router = APIRouter(
 
 @router.get(
     "/query/",
-    summary="Search Wikidata properties with vector and keyword (RRF)",
-    operation_id="searchPropertiesRRF",
+    summary="Search Wikidata properties with vector and keyword search",
+    operation_id="searchProperties",
     response_model=List[PropertyQuery],
     response_model_exclude_none=True,
 )
@@ -86,8 +84,8 @@ async def property_query_route(
 ):
     """Performs vector and keyword search on Wikidata properties.
 
-    This endpoint combines Vector Search and Keyword Search using Reciprocal Rank Fusion (RRF).
-    Optionally, reranking can be enabled for additional relevance scoring.
+    This endpoint combines Vector Search and Keyword Search, deduplicates entities, and sorts them by
+    similarity score. Optionally, reranking can be enabled to replace the similarity-based order.
 
     **Args:**
 
@@ -108,7 +106,6 @@ async def property_query_route(
 
     - **PID** (str): Wikidata PID of the property.
     - **similarity_score** (float): Dot product similarity score between the property and the query.
-    - **rrf_score** (float): Reciprocal Rank Fusion score combining vector and keyword results.
     - **source** (str): Indicates whether the property was found by "Keyword Search", "Vector Search", or both.
     - **vector** (list[float], optional): Present when `return_vectors` is `true`.
     - **reranker_score** (float, optional): Present when `rerank` is `true`.

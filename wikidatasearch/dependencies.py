@@ -59,12 +59,7 @@ def verify_admin_auth(request: Request) -> str:
 def require_descriptive_user_agent(request: Request) -> None:
     """Enforce a descriptive User-Agent and blocks generic HTTP clients."""
     ua = request.headers.get("user-agent", "").strip()
-    not_descriptive = (
-        not ua
-        or " " not in ua
-        or len(ua) < 10
-        or '@example.com' in ua
-    )
+    not_descriptive = not ua or " " not in ua or len(ua) < 10 or "@example.com" in ua
     if not_descriptive:
         error = "A more descriptive User-Agent is required"
         Logger.add_request(request, 400, time.time(), error=error)

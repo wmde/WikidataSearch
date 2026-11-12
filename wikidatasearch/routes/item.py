@@ -18,7 +18,6 @@ class ItemQuery(BaseModel):
 
     QID: str = Field(..., description="Wikidata item QID")
     similarity_score: float = Field(..., description="Dot product similarity")
-    rrf_score: Optional[float] = Field(0.0, description="Reciprocal Rank Fusion score")
     source: Optional[str] = Field("", description="Source of the search")
     vector: Optional[list[float]] = Field(None, description="Present when return_vectors is True")
     reranker_score: Optional[float] = Field(None, description="Present when rerank is True")
@@ -30,14 +29,13 @@ router = APIRouter(
     dependencies=[Depends(require_descriptive_user_agent)],
     responses={
         200: {
-            "description": "List of relevant Wikidata items sorted by fused similarity scores",
+            "description": "List of relevant Wikidata items sorted by similarity or reranker score",
             "content": {
                 "application/json": {
                     "example": [
                         {
                             "QID": "Q42",
                             "similarity_score": 0.95,
-                            "rrf_score": 0.043,
                             "source": "Vector Search",
                         }
                     ]
@@ -52,8 +50,8 @@ router = APIRouter(
 
 @router.get(
     "/query/",
-    summary="Search Wikidata items with vector and keyword (RRF)",
-    operation_id="searchItemsRRF",
+    summary="Search Wikidata items with vector and keyword search",
+    operation_id="searchItems",
     response_model=List[ItemQuery],
     response_model_exclude_none=True,
 )
@@ -93,8 +91,8 @@ async def item_query_route(
 ):
     """Performs vector and keyword search on Wikidata items.
 
-    This endpoint combines Vector Search and Keyword Search using Reciprocal Rank Fusion (RRF).
-    Optionally, reranking can be enabled for additional relevance scoring.
+    This endpoint combines Vector Search and Keyword Search, deduplicates entities, and sorts them by
+    similarity score. Optionally, reranking can be enabled to replace the similarity-based order.
 
     **Args:**
 
@@ -119,7 +117,6 @@ async def item_query_route(
 
     - **QID** (str): Wikidata QID of the item.
     - **similarity_score** (float): Dot product similarity score between the item and the query.
-    - **rrf_score** (float): Reciprocal Rank Fusion score combining vector and keyword results.
     - **source** (str): Indicates whether the item was found by "Keyword Search", "Vector Search", or both.
     - **vector** (list[float], optional): Present when `return_vectors` is `true`.
     - **reranker_score** (float, optional): Present when `rerank` is `true`.
