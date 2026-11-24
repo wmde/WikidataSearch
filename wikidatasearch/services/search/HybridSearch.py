@@ -414,7 +414,13 @@ class HybridSearch(Search):
                     )
                     vfunc.append((vdblang, func))
 
-            vector_results = [item for _, future in vfunc for item in future.result()]
+            vector_results = []
+            shard_embeddings = []
+            for _, future in vfunc:
+                shard_results, shard_embedding = future.result()
+                vector_results.extend(shard_results)
+                if shard_embedding is not None:
+                    shard_embeddings.append(shard_embedding)
 
         best_by_id = {}
         for item in vector_results:
@@ -425,8 +431,65 @@ class HybridSearch(Search):
             if previous is None or item.get("similarity_score", 0.0) > previous.get("similarity_score", 0.0):
                 best_by_id[entity_id] = item
 
+        missing_ids = [entity_id for entity_id in q_list + p_list if entity_id not in best_by_id]
+        if missing_ids:
+            # In case the query is a WDID, compare with embeddings from each shard and return the max score.
+            embeddings = [embedding] if embedding is not None else shard_embeddings
+            fallback_results = self._get_similarity_scores_for_missing_ids(
+                missing_ids,
+                embeddings,
+                return_vectors,
+                return_text,
+            )
+            best_by_id.update({item.get("QID") or item.get("PID"): item for item in fallback_results})
+
         results = sorted(best_by_id.values(), key=lambda x: x.get("similarity_score", 0.0), reverse=True)
         return results[: len(qids)]
+
+    def _get_similarity_scores_for_missing_ids(
+        self,
+        missing_ids: list[str],
+        embeddings: list[list],
+        return_vectors: bool,
+        return_text: bool,
+    ) -> list:
+        """Score IDs missing from the vector database using textifier representations."""
+        if not embeddings:
+            return []
+
+        try:
+            text_by_id = self.get_text_by_ids(
+                missing_ids,
+                format="text",
+                lang="en",
+            )
+            fallback_ids = [entity_id for entity_id in missing_ids if text_by_id.get(entity_id)]
+            if not fallback_ids:
+                return []
+
+            document_embeddings = self.embedding_model.embed_documents(
+                [text_by_id[entity_id] for entity_id in fallback_ids]
+            )
+        except Exception:
+            traceback.print_exc()
+            return []
+
+        results = []
+        for entity_id, document_embedding in zip(fallback_ids, document_embeddings):
+            ID_name = "QID" if entity_id.startswith("Q") else "PID"
+            result = {
+                ID_name: entity_id,
+                "similarity_score": max(
+                    self.embedding_model.similarity(embedding, document_embedding) for embedding in embeddings
+                ),
+            }
+            if return_vectors:
+                result["vector"] = document_embedding
+            if return_text:
+                result["text"] = text_by_id[entity_id]
+            results.append(result)
+
+        return results
 
     def _get_similarity_scores_for_shard(
         self,
@@ -438,7 +501,7 @@ class HybridSearch(Search):
         return_vectors: bool,
         return_text: bool,
         item_vectorsearch: VectorSearch,
-    ) -> list:
+    ) -> tuple[list, list | None]:
         """Score item and property IDs in their respective collections for one language shard."""
         shard_embedding = embedding
         if shard_embedding is None:
@@ -450,7 +513,7 @@ class HybridSearch(Search):
             )
 
         if shard_embedding is None:
-            return []
+            return [], None
 
         results = []
         if qids:
@@ -473,7 +536,7 @@ class HybridSearch(Search):
                     return_text=return_text,
                 )
             )
-        return results
+        return results, shard_embedding
 
     @staticmethod
     def merge_results_by_similarity(results: list[tuple[str, list[dict]]]) -> list[dict]:
